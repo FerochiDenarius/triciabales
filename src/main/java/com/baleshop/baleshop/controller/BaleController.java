@@ -43,7 +43,7 @@ public class BaleController {
             @RequestParam("video") MultipartFile video
     ) throws IOException {
 
-        String uploadDir = System.getProperty("user.dir") + "/uploads/";
+        String uploadDir = "/var/www/triciabales/uploads/";
 
         File dir = new File(uploadDir);
         if (!dir.exists()) {
