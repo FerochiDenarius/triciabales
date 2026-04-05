@@ -5,8 +5,9 @@ import com.baleshop.baleshop.service.BaleService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import com.baleshop.baleshop.service.CloudinaryService;
 
-import java.io.File;
+
 import java.io.IOException;
 import java.util.List;
 
@@ -17,6 +18,8 @@ public class BaleController {
 
     @Autowired
     private BaleService service;
+    @Autowired
+    private CloudinaryService cloudinaryService;
 
     // ✅ GET all bales
     @GetMapping
@@ -43,22 +46,10 @@ public class BaleController {
             @RequestParam("video") MultipartFile video
     ) throws IOException {
 
-        String uploadDir = "/var/www/triciabales/uploads/";
+        String imageUrl = cloudinaryService.uploadImage(image);
+        String videoUrl = cloudinaryService.uploadVideo(video);
 
-        File dir = new File(uploadDir);
-        if (!dir.exists()) {
-            boolean created = dir.mkdirs();
-            System.out.println("Upload directory created: " + created);
-        }
-
-        // Save files
-        String imagePath = uploadDir + image.getOriginalFilename();
-        String videoPath = uploadDir + video.getOriginalFilename();
-
-        image.transferTo(new File(imagePath));
-        video.transferTo(new File(videoPath));
-
-        // Save to DB
+// Save to DB
         Bale bale = new Bale();
         bale.setName(name);
         bale.setPrice(price);
@@ -67,9 +58,8 @@ public class BaleController {
         bale.setDescription(description);
         bale.setStatus(status);
 
-        // IMPORTANT: These paths will be used in frontend
-        bale.setImageUrl("/uploads/" + image.getOriginalFilename());
-        bale.setVideoUrl("/uploads/" + video.getOriginalFilename());
+        bale.setImageUrl(imageUrl);
+        bale.setVideoUrl(videoUrl);
 
         return service.addBale(bale);
     }
