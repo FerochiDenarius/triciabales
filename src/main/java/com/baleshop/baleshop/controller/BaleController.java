@@ -42,12 +42,17 @@ public class BaleController {
             @RequestParam("category") String category,
             @RequestParam("description") String description,
             @RequestParam("status") String status,
+            @RequestParam(value = "type", defaultValue = "bale") String type,
             @RequestParam("image") MultipartFile image,
-            @RequestParam("video") MultipartFile video
+            @RequestParam(value = "video", required = false) MultipartFile video
     ) throws IOException {
 
         String imageUrl = cloudinaryService.uploadImage(image);
-        String videoUrl = cloudinaryService.uploadVideo(video);
+        String videoUrl = null;
+
+        if (video != null && !video.isEmpty()) {
+            videoUrl = cloudinaryService.uploadVideo(video);
+        }
 
 // Save to DB
         Bale bale = new Bale();
@@ -57,6 +62,7 @@ public class BaleController {
         bale.setCategory(category);
         bale.setDescription(description);
         bale.setStatus(status);
+        bale.setType(type);
 
         bale.setImageUrl(imageUrl);
         bale.setVideoUrl(videoUrl);

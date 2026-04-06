@@ -16,6 +16,7 @@ public class Bale {
     private String category;
     private String description;
 
+
     @Column(name = "image_url")
     private String imageUrl;
 
@@ -23,6 +24,7 @@ public class Bale {
     private String videoUrl;
 
     private String status;
+    private String type = "bale";
 
     // ✅ Default constructor (REQUIRED by JPA)
     public Bale() {
@@ -39,6 +41,7 @@ public class Bale {
         this.imageUrl = imageUrl;
         this.videoUrl = videoUrl;
         this.status = status;
+
     }
 
     // ✅ GETTERS & SETTERS
@@ -113,5 +116,13 @@ public class Bale {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    public void setType(String type) {
+        this.type = type;
     }
 }
