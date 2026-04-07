@@ -55,15 +55,15 @@ public class OrderController {
         }
 
         order.setDeliveryStatus("pending");
-        if (request.getPaymentStatus() != null && !request.getPaymentStatus().isBlank()) {
-            order.setPaymentStatus(request.getPaymentStatus());
-        } else {
-            order.setPaymentStatus(
-                    "cash".equalsIgnoreCase(request.getPaymentMethod())
-                            ? "unpaid"
-                            : "pending"
-            );
-        }
+        order.setPaymentStatus(
+                request.getPaymentStatus() != null
+                        ? request.getPaymentStatus()
+                        : (
+                        "cash".equalsIgnoreCase(request.getPaymentMethod())
+                                ? "pending"
+                                : "awaiting_payment"
+                )
+        );
 
         List<OrderItem> orderItems = new ArrayList<>();
         double total = 0;
