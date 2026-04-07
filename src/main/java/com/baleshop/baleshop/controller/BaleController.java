@@ -1,8 +1,10 @@
 package com.baleshop.baleshop.controller;
 
 import com.baleshop.baleshop.model.Bale;
+import com.baleshop.baleshop.repository.BaleRepository;
 import com.baleshop.baleshop.service.BaleService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import com.baleshop.baleshop.service.CloudinaryService;
@@ -10,6 +12,7 @@ import com.baleshop.baleshop.service.CloudinaryService;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/triciabales")
@@ -18,6 +21,8 @@ public class BaleController {
 
     @Autowired
     private BaleService service;
+    @Autowired
+    private BaleRepository baleRepository;
     @Autowired
     private CloudinaryService cloudinaryService;
 
@@ -68,5 +73,37 @@ public class BaleController {
         bale.setVideoUrl(videoUrl);
 
         return service.addBale(bale);
+    }
+
+    @PutMapping("/{id}/status")
+    public ResponseEntity<?> toggleStatus(@PathVariable int id) {
+        Optional<Bale> optionalBale = baleRepository.findById(id);
+
+        if (optionalBale.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Bale bale = optionalBale.get();
+
+        if ("sold".equalsIgnoreCase(bale.getStatus())) {
+            bale.setStatus("available");
+        } else {
+            bale.setStatus("sold");
+        }
+
+        baleRepository.save(bale);
+
+        return ResponseEntity.ok(bale);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteBale(@PathVariable int id) {
+        if (!baleRepository.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        baleRepository.deleteById(id);
+
+        return ResponseEntity.ok().build();
     }
 }
