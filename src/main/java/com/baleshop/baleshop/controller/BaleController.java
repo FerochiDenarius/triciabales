@@ -12,6 +12,7 @@ import com.baleshop.baleshop.service.CloudinaryService;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @RestController
@@ -99,11 +100,17 @@ public class BaleController {
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteBale(@PathVariable int id) {
         if (!baleRepository.existsById(id)) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.status(404).body(Map.of(
+                    "success", false,
+                    "message", "Bale not found"
+            ));
         }
 
         baleRepository.deleteById(id);
 
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Bale deleted successfully"
+        ));
     }
 }
