@@ -41,7 +41,7 @@ public class BaleController {
 
     // 🔥 NEW: Upload with image + video
     @PostMapping("/upload")
-    public Bale uploadBale(
+    public ResponseEntity<?> uploadBale(
             @RequestParam("name") String name,
             @RequestParam("price") double price,
             @RequestParam("weight") String weight,
@@ -49,31 +49,38 @@ public class BaleController {
             @RequestParam("description") String description,
             @RequestParam("status") String status,
             @RequestParam(value = "type", defaultValue = "bale") String type,
-            @RequestParam("image") MultipartFile image,
+            @RequestParam("image") MultipartFile[] images,
             @RequestParam(value = "video", required = false) MultipartFile video
     ) throws IOException {
 
-        String imageUrl = cloudinaryService.uploadImage(image);
+        List<String> imageUrls = cloudinaryService.uploadImages(images);
+
+        if (imageUrls.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "At least one image is required"
+            ));
+        }
+
         String videoUrl = null;
 
         if (video != null && !video.isEmpty()) {
             videoUrl = cloudinaryService.uploadVideo(video);
         }
 
-// Save to DB
-        Bale bale = new Bale();
-        bale.setName(name);
-        bale.setPrice(price);
-        bale.setWeight(weight);
-        bale.setCategory(category);
-        bale.setDescription(description);
-        bale.setStatus(status);
-        bale.setType(type);
-
-        bale.setImageUrl(imageUrl);
-        bale.setVideoUrl(videoUrl);
-
-        return service.addBale(bale);
+        return ResponseEntity.ok(
+                service.createBale(
+                        name,
+                        price,
+                        weight,
+                        category,
+                        description,
+                        status,
+                        type,
+                        imageUrls,
+                        videoUrl
+                )
+        );
     }
 
     @PutMapping("/{id}/status")

@@ -1,6 +1,8 @@
 package com.baleshop.baleshop.model;
 
 import jakarta.persistence.*;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "bales")
@@ -19,6 +21,11 @@ public class Bale {
 
     @Column(name = "image_url")
     private String imageUrl;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "bale_images", joinColumns = @JoinColumn(name = "bale_id"))
+    @Column(name = "image_url")
+    private List<String> imageUrls = new ArrayList<>();
 
     @Column(name = "video_url")
     private String videoUrl;
@@ -100,6 +107,14 @@ public class Bale {
 
     public void setImageUrl(String imageUrl) {
         this.imageUrl = imageUrl;
+    }
+
+    public List<String> getImageUrls() {
+        return imageUrls;
+    }
+
+    public void setImageUrls(List<String> imageUrls) {
+        this.imageUrls = imageUrls == null ? new ArrayList<>() : imageUrls;
     }
 
     public String getVideoUrl() {

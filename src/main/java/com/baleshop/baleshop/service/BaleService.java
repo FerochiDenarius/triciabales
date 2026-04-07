@@ -20,4 +20,30 @@ public class BaleService {
     public Bale addBale(Bale bale) {
         return repo.save(bale);
     }
+
+    public Bale createBale(
+            String name,
+            double price,
+            String weight,
+            String category,
+            String description,
+            String status,
+            String type,
+            List<String> imageUrls,
+            String videoUrl
+    ) {
+        Bale bale = new Bale();
+        bale.setName(name);
+        bale.setPrice(price);
+        bale.setWeight(weight);
+        bale.setCategory(category);
+        bale.setDescription(description);
+        bale.setStatus(status);
+        bale.setType(type);
+        bale.setImageUrls(imageUrls);
+        bale.setImageUrl(imageUrls == null || imageUrls.isEmpty() ? null : imageUrls.get(0));
+        bale.setVideoUrl(videoUrl);
+
+        return repo.save(bale);
+    }
 }
