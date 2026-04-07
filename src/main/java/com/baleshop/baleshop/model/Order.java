@@ -27,6 +27,13 @@ public class Order {
     private String deliveryStatus;
     private String paymentMethod;
     private String paymentStatus;
+    private String momoNetwork;
+    private String momoNumber;
+    private String cardEmail;
+
+    @ManyToOne
+    @JoinColumn(name = "user_id")
+    private User user;
 
     @JsonManagedReference
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
@@ -147,6 +154,38 @@ public class Order {
 
     public void setPaymentStatus(String paymentStatus) {
         this.paymentStatus = paymentStatus;
+    }
+
+    public String getMomoNetwork() {
+        return momoNetwork;
+    }
+
+    public void setMomoNetwork(String momoNetwork) {
+        this.momoNetwork = momoNetwork;
+    }
+
+    public String getMomoNumber() {
+        return momoNumber;
+    }
+
+    public void setMomoNumber(String momoNumber) {
+        this.momoNumber = momoNumber;
+    }
+
+    public String getCardEmail() {
+        return cardEmail;
+    }
+
+    public void setCardEmail(String cardEmail) {
+        this.cardEmail = cardEmail;
+    }
+
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
     }
 
     public List<OrderItem> getItems() {
