@@ -16,6 +16,10 @@ import java.util.List;
 @CrossOrigin(origins = "*")
 public class OrderController {
 
+    public OrderController() {
+        System.out.println("✅ OrderController loaded");
+    }
+
     @Autowired
     private OrderRepository orderRepository;
 
@@ -26,7 +30,18 @@ public class OrderController {
         order.setCustomerName(request.getCustomerName());
         order.setPhone(request.getPhone());
         order.setAddress(request.getAddress());
+
         order.setStatus("pending");
+
+        order.setDeliveryMethod(request.getDeliveryMethod());
+        order.setPaymentMethod(request.getPaymentMethod());
+
+        order.setDeliveryStatus("pending");
+        order.setPaymentStatus(
+                "cash".equalsIgnoreCase(request.getPaymentMethod())
+                        ? "unpaid"
+                        : "pending"
+        );
 
         List<OrderItem> orderItems = new ArrayList<>();
         double total = 0;
@@ -49,5 +64,11 @@ public class OrderController {
         order.setTotal(total);
 
         return orderRepository.save(order);
+    }
+
+    @GetMapping("/{id}")
+    public Order getOrder(@PathVariable Long id) {
+        return orderRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
     }
 }
