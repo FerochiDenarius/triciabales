@@ -29,6 +29,8 @@ public class BaleService {
             String description,
             String status,
             String type,
+            Long sellerId,
+            String sellerName,
             List<String> imageUrls,
             String videoUrl
     ) {
@@ -40,6 +42,8 @@ public class BaleService {
         bale.setDescription(description);
         bale.setStatus(status);
         bale.setType(type);
+        bale.setSellerId(sellerId);
+        bale.setSellerName(sellerName);
         bale.setImageUrls(imageUrls);
         bale.setImageUrl(imageUrls == null || imageUrls.isEmpty() ? null : imageUrls.get(0));
         bale.setVideoUrl(videoUrl);

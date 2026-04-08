@@ -4,7 +4,9 @@ import com.baleshop.baleshop.dto.CartItemDto;
 import com.baleshop.baleshop.dto.CheckoutRequest;
 import com.baleshop.baleshop.model.Order;
 import com.baleshop.baleshop.model.OrderItem;
+import com.baleshop.baleshop.model.Bale;
 import com.baleshop.baleshop.model.User;
+import com.baleshop.baleshop.repository.BaleRepository;
 import com.baleshop.baleshop.repository.OrderRepository;
 import com.baleshop.baleshop.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +30,8 @@ public class OrderController {
 
     @Autowired
     private OrderRepository orderRepository;
+    @Autowired
+    private BaleRepository baleRepository;
     @Autowired
     private UserRepository userRepository;
 
@@ -71,8 +75,21 @@ public class OrderController {
 
         List<OrderItem> orderItems = new ArrayList<>();
         double total = 0;
+        Long sellerId = null;
+        String sellerName = null;
 
         for (CartItemDto item : request.getItems()) {
+            Bale bale = baleRepository.findById((int) item.getBaleId())
+                    .orElseThrow(() -> new RuntimeException("Product not found"));
+
+            if (sellerId == null && bale.getSellerId() != null) {
+                sellerId = bale.getSellerId();
+                sellerName = bale.getSellerName();
+            }
+
+            if (sellerId != null && bale.getSellerId() != null && !sellerId.equals(bale.getSellerId())) {
+                throw new RuntimeException("Cart items from multiple sellers are not supported yet");
+            }
 
             OrderItem orderItem = new OrderItem();
             orderItem.setBaleId(item.getBaleId());
@@ -88,6 +105,8 @@ public class OrderController {
 
         order.setItems(orderItems);
         order.setTotal(total);
+        order.setSellerId(sellerId);
+        order.setSellerName(sellerName);
 
         return orderRepository.save(order);
     }
@@ -106,6 +125,11 @@ public class OrderController {
     @GetMapping("/user/{userId}")
     public List<Order> getUserOrders(@PathVariable Long userId) {
         return orderRepository.findByUserId(userId);
+    }
+
+    @GetMapping("/seller/{sellerId}")
+    public List<Order> getSellerOrders(@PathVariable Long sellerId) {
+        return orderRepository.findBySellerId(sellerId);
     }
 
     @PutMapping("/{id}/status")

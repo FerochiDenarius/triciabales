@@ -32,6 +32,8 @@ public class Bale {
 
     private String status;
     private String type = "bale";
+    private Long sellerId;
+    private String sellerName;
 
     // ✅ Default constructor (REQUIRED by JPA)
     public Bale() {
@@ -139,5 +141,21 @@ public class Bale {
 
     public void setType(String type) {
         this.type = type;
+    }
+
+    public Long getSellerId() {
+        return sellerId;
+    }
+
+    public void setSellerId(Long sellerId) {
+        this.sellerId = sellerId;
+    }
+
+    public String getSellerName() {
+        return sellerName;
+    }
+
+    public void setSellerName(String sellerName) {
+        this.sellerName = sellerName;
     }
 }

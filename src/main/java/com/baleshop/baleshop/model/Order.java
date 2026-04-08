@@ -20,6 +20,8 @@ public class Order {
     private String area;
     private String landmark;
     private String notes;
+    private Long sellerId;
+    private String sellerName;
 
     private Double total;
 
@@ -113,6 +115,22 @@ public class Order {
 
     public void setNotes(String notes) {
         this.notes = notes;
+    }
+
+    public Long getSellerId() {
+        return sellerId;
+    }
+
+    public void setSellerId(Long sellerId) {
+        this.sellerId = sellerId;
+    }
+
+    public String getSellerName() {
+        return sellerName;
+    }
+
+    public void setSellerName(String sellerName) {
+        this.sellerName = sellerName;
     }
 
     public Double getTotal() {

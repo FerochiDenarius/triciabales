@@ -49,6 +49,8 @@ public class BaleController {
             @RequestParam("description") String description,
             @RequestParam("status") String status,
             @RequestParam(value = "type", defaultValue = "bale") String type,
+            @RequestParam(value = "sellerId", required = false) Long sellerId,
+            @RequestParam(value = "sellerName", required = false) String sellerName,
             @RequestParam("image") MultipartFile[] images,
             @RequestParam(value = "video", required = false) MultipartFile video
     ) throws IOException {
@@ -77,6 +79,8 @@ public class BaleController {
                         description,
                         status,
                         type,
+                        sellerId,
+                        sellerName,
                         imageUrls,
                         videoUrl
                 )
