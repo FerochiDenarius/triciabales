@@ -18,6 +18,12 @@ public class User {
     private String phone;
     private String address;
     private String role; // BUYER or SELLER
+    @Column(unique = true)
+    private String referralCode;
+    private String referredByCode;
+    private Double referralDiscountPercent;
+    private Double referralCommissionDiscountPercent;
+    private Integer referralSalesRemaining;
     private String payoutMethod;
     private String momoNetwork;
     private String momoNumber;
@@ -82,6 +88,46 @@ public class User {
 
     public void setRole(String role) {
         this.role = role;
+    }
+
+    public String getReferralCode() {
+        return referralCode;
+    }
+
+    public void setReferralCode(String referralCode) {
+        this.referralCode = referralCode;
+    }
+
+    public String getReferredByCode() {
+        return referredByCode;
+    }
+
+    public void setReferredByCode(String referredByCode) {
+        this.referredByCode = referredByCode;
+    }
+
+    public Double getReferralDiscountPercent() {
+        return referralDiscountPercent;
+    }
+
+    public void setReferralDiscountPercent(Double referralDiscountPercent) {
+        this.referralDiscountPercent = referralDiscountPercent;
+    }
+
+    public Double getReferralCommissionDiscountPercent() {
+        return referralCommissionDiscountPercent;
+    }
+
+    public void setReferralCommissionDiscountPercent(Double referralCommissionDiscountPercent) {
+        this.referralCommissionDiscountPercent = referralCommissionDiscountPercent;
+    }
+
+    public Integer getReferralSalesRemaining() {
+        return referralSalesRemaining;
+    }
+
+    public void setReferralSalesRemaining(Integer referralSalesRemaining) {
+        this.referralSalesRemaining = referralSalesRemaining;
     }
 
     public String getPayoutMethod() {

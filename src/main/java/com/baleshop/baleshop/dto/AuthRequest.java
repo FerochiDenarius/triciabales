@@ -9,6 +9,7 @@ public class AuthRequest {
     private String address;
     private String role;
     private String ownerCode;
+    private String referralCode;
 
     public AuthRequest() {
     }
@@ -67,5 +68,13 @@ public class AuthRequest {
 
     public void setOwnerCode(String ownerCode) {
         this.ownerCode = ownerCode;
+    }
+
+    public String getReferralCode() {
+        return referralCode;
+    }
+
+    public void setReferralCode(String referralCode) {
+        this.referralCode = referralCode;
     }
 }
