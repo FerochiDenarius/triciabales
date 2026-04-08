@@ -8,6 +8,7 @@ public class AuthRequest {
     private String phone;
     private String address;
     private String role;
+    private String ownerCode;
 
     public AuthRequest() {
     }
@@ -58,5 +59,13 @@ public class AuthRequest {
 
     public void setRole(String role) {
         this.role = role;
+    }
+
+    public String getOwnerCode() {
+        return ownerCode;
+    }
+
+    public void setOwnerCode(String ownerCode) {
+        this.ownerCode = ownerCode;
     }
 }

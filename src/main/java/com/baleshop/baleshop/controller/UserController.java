@@ -4,6 +4,7 @@ import com.baleshop.baleshop.dto.AuthRequest;
 import com.baleshop.baleshop.model.User;
 import com.baleshop.baleshop.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -13,6 +14,9 @@ public class UserController {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Value("${app.owner-code:}")
+    private String ownerCode;
 
     @PostMapping("/register")
     public User register(@RequestBody AuthRequest request) {
@@ -27,7 +31,14 @@ public class UserController {
         user.setPassword(request.getPassword());
         user.setPhone(request.getPhone());
         user.setAddress(request.getAddress());
-        user.setRole(request.getRole());
+
+        if (ownerCode != null && !ownerCode.isBlank() && ownerCode.equals(request.getOwnerCode())) {
+            user.setRole("SUPER_ADMIN");
+        } else if (request.getRole() != null && !request.getRole().isBlank()) {
+            user.setRole(request.getRole());
+        } else {
+            user.setRole("BUYER");
+        }
 
         return userRepository.save(user);
     }

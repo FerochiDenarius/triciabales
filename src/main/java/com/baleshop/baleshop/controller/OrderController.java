@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -127,6 +128,41 @@ public class OrderController {
         if (updates.containsKey("paymentStatus")) {
             order.setPaymentStatus(updates.get("paymentStatus"));
         }
+
+        if (updates.containsKey("releasePayout") && "true".equals(updates.get("releasePayout"))) {
+            if (!Boolean.TRUE.equals(order.getConfirmedByBuyer())) {
+                return ResponseEntity.badRequest().build();
+            }
+
+            double total = order.getTotal() != null ? order.getTotal() : 0.0;
+            double commission = total * 0.10;
+            double sellerPayout = total - commission;
+
+            order.setCommissionAmount(commission);
+            order.setSellerPayoutAmount(sellerPayout);
+            order.setPaymentStatus("payout_released");
+            order.setPayoutReleased(true);
+            order.setPayoutReleasedAt(LocalDateTime.now());
+        }
+
+        orderRepository.save(order);
+
+        return ResponseEntity.ok(order);
+    }
+
+    @PutMapping("/{id}/confirm-received")
+    public ResponseEntity<Order> confirmOrderReceived(@PathVariable Long id) {
+        Optional<Order> optionalOrder = orderRepository.findById(id);
+
+        if (optionalOrder.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Order order = optionalOrder.get();
+
+        order.setConfirmedByBuyer(true);
+        order.setBuyerConfirmedAt(LocalDateTime.now());
+        order.setPaymentStatus("ready_for_payout");
 
         orderRepository.save(order);
 

@@ -2,6 +2,7 @@ package com.baleshop.baleshop.model;
 
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
@@ -30,6 +31,12 @@ public class Order {
     private String momoNetwork;
     private String momoNumber;
     private String cardEmail;
+    private Double commissionAmount;
+    private Double sellerPayoutAmount;
+    private Boolean payoutReleased = false;
+    private Boolean confirmedByBuyer = false;
+    private LocalDateTime buyerConfirmedAt;
+    private LocalDateTime payoutReleasedAt;
 
     @ManyToOne
     @JoinColumn(name = "user_id")
@@ -178,6 +185,54 @@ public class Order {
 
     public void setCardEmail(String cardEmail) {
         this.cardEmail = cardEmail;
+    }
+
+    public Double getCommissionAmount() {
+        return commissionAmount;
+    }
+
+    public void setCommissionAmount(Double commissionAmount) {
+        this.commissionAmount = commissionAmount;
+    }
+
+    public Double getSellerPayoutAmount() {
+        return sellerPayoutAmount;
+    }
+
+    public void setSellerPayoutAmount(Double sellerPayoutAmount) {
+        this.sellerPayoutAmount = sellerPayoutAmount;
+    }
+
+    public Boolean getPayoutReleased() {
+        return payoutReleased;
+    }
+
+    public void setPayoutReleased(Boolean payoutReleased) {
+        this.payoutReleased = payoutReleased;
+    }
+
+    public Boolean getConfirmedByBuyer() {
+        return confirmedByBuyer;
+    }
+
+    public void setConfirmedByBuyer(Boolean confirmedByBuyer) {
+        this.confirmedByBuyer = confirmedByBuyer;
+    }
+
+    public LocalDateTime getBuyerConfirmedAt() {
+        return buyerConfirmedAt;
+    }
+
+    public void setBuyerConfirmedAt(LocalDateTime buyerConfirmedAt) {
+        this.buyerConfirmedAt = buyerConfirmedAt;
+    }
+
+    public LocalDateTime getPayoutReleasedAt() {
+        return payoutReleasedAt;
+    }
+
+    public void setPayoutReleasedAt(LocalDateTime payoutReleasedAt) {
+        this.payoutReleasedAt = payoutReleasedAt;
     }
 
     public User getUser() {
