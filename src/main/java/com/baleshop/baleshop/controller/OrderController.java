@@ -8,10 +8,13 @@ import com.baleshop.baleshop.model.User;
 import com.baleshop.baleshop.repository.OrderRepository;
 import com.baleshop.baleshop.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -94,8 +97,39 @@ public class OrderController {
                 .orElseThrow(() -> new RuntimeException("Order not found"));
     }
 
+    @GetMapping
+    public List<Order> getAllOrders() {
+        return orderRepository.findAll();
+    }
+
     @GetMapping("/user/{userId}")
     public List<Order> getUserOrders(@PathVariable Long userId) {
         return orderRepository.findByUserId(userId);
+    }
+
+    @PutMapping("/{id}/status")
+    public ResponseEntity<Order> updateOrderStatus(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> updates
+    ) {
+        Optional<Order> optionalOrder = orderRepository.findById(id);
+
+        if (optionalOrder.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Order order = optionalOrder.get();
+
+        if (updates.containsKey("deliveryStatus")) {
+            order.setDeliveryStatus(updates.get("deliveryStatus"));
+        }
+
+        if (updates.containsKey("paymentStatus")) {
+            order.setPaymentStatus(updates.get("paymentStatus"));
+        }
+
+        orderRepository.save(order);
+
+        return ResponseEntity.ok(order);
     }
 }
