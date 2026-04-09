@@ -2,6 +2,9 @@
 
 const nodemailer = require('nodemailer');
 
+const DEFAULT_RESEND_API_URL = 'https://api.resend.com/emails';
+const DEFAULT_ZEPTOMAIL_API_URL = 'https://api.zeptomail.com/v1.1/email';
+
 function readStdin() {
   return new Promise((resolve, reject) => {
     let data = '';
@@ -31,6 +34,23 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function parseSender(sender) {
+  const raw = String(sender || '').trim();
+  const match = raw.match(/^(.*)<([^>]+)>$/);
+
+  if (!match) {
+    return {
+      address: raw,
+      name: ''
+    };
+  }
+
+  return {
+    name: match[1].trim().replace(/^"|"$/g, ''),
+    address: match[2].trim()
+  };
+}
+
 function buildHtml(subject, text, actionUrl) {
   const escapedSubject = escapeHtml(subject);
   const escapedText = escapeHtml(text).replace(/\n/g, '<br>');
@@ -53,10 +73,104 @@ function buildHtml(subject, text, actionUrl) {
   `;
 }
 
-async function main() {
-  const raw = await readStdin();
-  const payload = JSON.parse(raw || '{}');
+async function sendViaZeptoMail(payload) {
+  const token = process.env.ZEPTOMAIL_SEND_MAIL_TOKEN;
+  if (!token) {
+    return null;
+  }
 
+  const sender = parseSender(payload.from || process.env.EMAIL_FROM || process.env.EMAIL_USER);
+  const controller = new AbortController();
+  const timeoutMs = Number(process.env.ZEPTOMAIL_TIMEOUT || 10000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(process.env.ZEPTOMAIL_API_URL || DEFAULT_ZEPTOMAIL_API_URL, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: `Zoho-enczapikey ${token}`
+      },
+      body: JSON.stringify({
+        from: {
+          address: sender.address,
+          name: sender.name || 'Yenkasa Store'
+        },
+        to: [
+          {
+            email_address: {
+              address: payload.to
+            }
+          }
+        ],
+        subject: payload.subject,
+        textbody: payload.text,
+        htmlbody: buildHtml(payload.subject, payload.text, payload.actionUrl)
+      }),
+      signal: controller.signal
+    });
+
+    const body = await response.text();
+
+    if (!response.ok) {
+      throw new Error(`ZeptoMail API ${response.status}: ${body}`);
+    }
+
+    return {
+      provider: 'zeptomail-api',
+      status: response.status,
+      response: body
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function sendViaResend(payload) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    return null;
+  }
+
+  const controller = new AbortController();
+  const timeoutMs = Number(process.env.RESEND_TIMEOUT || 10000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(process.env.RESEND_API_URL || DEFAULT_RESEND_API_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: payload.from || process.env.EMAIL_FROM || process.env.EMAIL_USER,
+        to: [payload.to],
+        subject: payload.subject,
+        text: payload.text,
+        html: buildHtml(payload.subject, payload.text, payload.actionUrl)
+      }),
+      signal: controller.signal
+    });
+
+    const body = await response.text();
+
+    if (!response.ok) {
+      throw new Error(`Resend API ${response.status}: ${body}`);
+    }
+
+    return {
+      provider: 'resend-api',
+      status: response.status,
+      response: body
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function sendViaSmtp(payload) {
   const transporter = nodemailer.createTransport({
     host: requiredEnv('SMTP_HOST'),
     port: Number(process.env.SMTP_PORT || 587),
@@ -78,10 +192,24 @@ async function main() {
     html: buildHtml(payload.subject, payload.text, payload.actionUrl)
   });
 
-  process.stdout.write(JSON.stringify({
-    ok: true,
+  return {
+    provider: 'smtp',
     messageId: info.messageId,
     response: info.response
+  };
+}
+
+async function main() {
+  const raw = await readStdin();
+  const payload = JSON.parse(raw || '{}');
+  const result =
+    await sendViaResend(payload) ||
+    await sendViaZeptoMail(payload) ||
+    await sendViaSmtp(payload);
+
+  process.stdout.write(JSON.stringify({
+    ok: true,
+    ...result
   }));
 }
 
