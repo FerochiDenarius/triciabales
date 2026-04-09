@@ -10,6 +10,9 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -71,7 +74,23 @@ public class AccountEmailService {
             payload.put("text", body);
             payload.put("actionUrl", actionUrl);
 
-            ProcessBuilder processBuilder = new ProcessBuilder(nodeBinary, mailerScriptPath);
+            Path workingDirectory = Paths.get(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
+            Path configuredScriptPath = Paths.get(mailerScriptPath);
+            Path resolvedScriptPath = configuredScriptPath.isAbsolute()
+                    ? configuredScriptPath.normalize()
+                    : workingDirectory.resolve(configuredScriptPath).normalize();
+
+            if (!Files.exists(resolvedScriptPath)) {
+                throw new IllegalStateException(
+                        "Mailer script not found at " + resolvedScriptPath + " (cwd=" + workingDirectory + ")"
+                );
+            }
+
+            log.info("Launching nodemailer bridge with nodeBinary={} scriptPath={} cwd={}",
+                    nodeBinary, resolvedScriptPath, workingDirectory);
+
+            ProcessBuilder processBuilder = new ProcessBuilder(nodeBinary, resolvedScriptPath.toString());
+            processBuilder.directory(workingDirectory.toFile());
             processBuilder.redirectErrorStream(true);
             Process process = processBuilder.start();
 
