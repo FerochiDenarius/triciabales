@@ -21,8 +21,13 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/users")
@@ -303,9 +308,68 @@ public class UserController {
     }
 
     @GetMapping
-    public ResponseEntity<?> getAllUsers(HttpServletRequest request) {
+    public ResponseEntity<?> getAllUsers(
+            @RequestParam(value = "role", required = false) String role,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "includeDeleted", defaultValue = "false") boolean includeDeleted,
+            HttpServletRequest request
+    ) {
         sessionAuthService.requireRole(request, "SUPER_ADMIN");
-        return ResponseEntity.ok(userRepository.findAll());
+        return ResponseEntity.ok(filterUsers(role, status, includeDeleted));
+    }
+
+    @GetMapping("/buyers")
+    public ResponseEntity<?> getBuyerUsers(
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "includeDeleted", defaultValue = "false") boolean includeDeleted,
+            HttpServletRequest request
+    ) {
+        sessionAuthService.requireRole(request, "SUPER_ADMIN");
+        return ResponseEntity.ok(filterUsers("BUYER", status, includeDeleted));
+    }
+
+    @GetMapping("/sellers")
+    public ResponseEntity<?> getSellerUsers(
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "includeDeleted", defaultValue = "false") boolean includeDeleted,
+            HttpServletRequest request
+    ) {
+        sessionAuthService.requireRole(request, "SUPER_ADMIN");
+        return ResponseEntity.ok(filterUsers("SELLER", status, includeDeleted));
+    }
+
+    @GetMapping("/summary")
+    public ResponseEntity<?> getUserSummary(HttpServletRequest request) {
+        sessionAuthService.requireRole(request, "SUPER_ADMIN");
+
+        List<User> users = userRepository.findAll();
+        Map<String, Long> roleCounts = users.stream()
+                .collect(Collectors.groupingBy(
+                        user -> normalizeValue(user.getRole(), "UNKNOWN"),
+                        LinkedHashMap::new,
+                        Collectors.counting()
+                ));
+        Map<String, Long> statusCounts = users.stream()
+                .collect(Collectors.groupingBy(
+                        user -> normalizeValue(user.getAccountStatus(), "ACTIVE"),
+                        LinkedHashMap::new,
+                        Collectors.counting()
+                ));
+
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("totalUsers", (long) users.size());
+        summary.put("buyers", roleCounts.getOrDefault("BUYER", 0L));
+        summary.put("sellers", roleCounts.getOrDefault("SELLER", 0L));
+        summary.put("admins", roleCounts.getOrDefault("ADMIN", 0L));
+        summary.put("superAdmins", roleCounts.getOrDefault("SUPER_ADMIN", 0L));
+        summary.put("activeUsers", statusCounts.getOrDefault("ACTIVE", 0L));
+        summary.put("suspendedUsers", statusCounts.getOrDefault("SUSPENDED", 0L));
+        summary.put("blockedUsers", statusCounts.getOrDefault("BLOCKED", 0L));
+        summary.put("deletedUsers", statusCounts.getOrDefault("DELETED", 0L));
+        summary.put("roleCounts", roleCounts);
+        summary.put("statusCounts", statusCounts);
+
+        return ResponseEntity.ok(summary);
     }
 
     @PutMapping("/{id}/status")
@@ -396,5 +460,22 @@ public class UserController {
         } while (userRepository.findByReferralCode(code).isPresent());
 
         return code;
+    }
+
+    private List<User> filterUsers(String role, String status, boolean includeDeleted) {
+        return userRepository.findAll().stream()
+                .filter(user -> includeDeleted || !"DELETED".equals(normalizeValue(user.getAccountStatus(), "ACTIVE")))
+                .filter(user -> role == null || role.isBlank() || normalizeValue(user.getRole(), "").equals(normalizeValue(role, "")))
+                .filter(user -> status == null || status.isBlank() || normalizeValue(user.getAccountStatus(), "ACTIVE").equals(normalizeValue(status, "ACTIVE")))
+                .sorted(Comparator.comparing(User::getId, Comparator.nullsLast(Long::compareTo)).reversed())
+                .toList();
+    }
+
+    private String normalizeValue(String value, String defaultValue) {
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
+
+        return value.trim().toUpperCase(Locale.ROOT);
     }
 }

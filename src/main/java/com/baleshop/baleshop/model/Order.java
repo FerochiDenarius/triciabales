@@ -286,4 +286,29 @@ public class Order {
     public void setItems(List<OrderItem> items) {
         this.items = items;
     }
+
+    @Transient
+    public Long getBuyerId() {
+        return user != null ? user.getId() : null;
+    }
+
+    @Transient
+    public String getBuyerName() {
+        return user != null ? user.getName() : customerName;
+    }
+
+    @Transient
+    public String getBuyerEmail() {
+        return user != null ? user.getEmail() : null;
+    }
+
+    @Transient
+    public String getBuyerRole() {
+        return user != null ? user.getRole() : null;
+    }
+
+    @Transient
+    public String getBuyerAccountStatus() {
+        return user != null ? user.getAccountStatus() : null;
+    }
 }

@@ -19,6 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -122,7 +123,7 @@ public class OrderController {
     @GetMapping
     public List<Order> getAllOrders(HttpServletRequest request) {
         sessionAuthService.requireRole(request, "ADMIN", "SUPER_ADMIN");
-        return orderRepository.findAll();
+        return sortOrdersByNewestFirst(orderRepository.findAll());
     }
 
     @GetMapping("/user/{userId}")
@@ -133,7 +134,7 @@ public class OrderController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only view your own orders");
         }
 
-        return orderRepository.findByUserId(userId);
+        return sortOrdersByNewestFirst(orderRepository.findByUserId(userId));
     }
 
     @GetMapping("/seller/{sellerId}")
@@ -144,7 +145,7 @@ public class OrderController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only view your own seller orders");
         }
 
-        return orderRepository.findBySellerId(sellerId);
+        return sortOrdersByNewestFirst(orderRepository.findBySellerId(sellerId));
     }
 
     @PutMapping("/{id}/status")
@@ -255,5 +256,11 @@ public class OrderController {
         orderRepository.save(order);
 
         return ResponseEntity.ok(order);
+    }
+
+    private List<Order> sortOrdersByNewestFirst(List<Order> orders) {
+        return orders.stream()
+                .sorted(Comparator.comparing(Order::getId, Comparator.nullsLast(Long::compareTo)).reversed())
+                .toList();
     }
 }

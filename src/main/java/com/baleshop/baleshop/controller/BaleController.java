@@ -16,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -74,8 +75,71 @@ public class BaleController {
             @RequestParam(value = "type", defaultValue = "bale") String type,
             @RequestParam(value = "sellerId", required = false) Long sellerId,
             @RequestParam(value = "sellerName", required = false) String sellerName,
-            @RequestParam("image") MultipartFile[] images,
+            @RequestParam(value = "image", required = false) MultipartFile[] images,
             @RequestParam(value = "video", required = false) MultipartFile video
+    ) throws IOException {
+        return handleUploadBale(
+                request,
+                name,
+                price,
+                weight,
+                category,
+                description,
+                status,
+                type,
+                sellerId,
+                sellerName,
+                images,
+                video,
+                false
+        );
+    }
+
+    @PostMapping("/upload/video-only")
+    public ResponseEntity<?> uploadVideoOnlyBale(
+            HttpServletRequest request,
+            @RequestParam("name") String name,
+            @RequestParam("price") double price,
+            @RequestParam("weight") String weight,
+            @RequestParam("category") String category,
+            @RequestParam("description") String description,
+            @RequestParam("status") String status,
+            @RequestParam(value = "type", defaultValue = "product_video") String type,
+            @RequestParam(value = "sellerId", required = false) Long sellerId,
+            @RequestParam(value = "sellerName", required = false) String sellerName,
+            @RequestParam("video") MultipartFile video
+    ) throws IOException {
+        return handleUploadBale(
+                request,
+                name,
+                price,
+                weight,
+                category,
+                description,
+                status,
+                type,
+                sellerId,
+                sellerName,
+                null,
+                video,
+                true
+        );
+    }
+
+    private ResponseEntity<?> handleUploadBale(
+            HttpServletRequest request,
+            String name,
+            double price,
+            String weight,
+            String category,
+            String description,
+            String status,
+            String type,
+            Long sellerId,
+            String sellerName,
+            MultipartFile[] images,
+            MultipartFile video,
+            boolean explicitVideoOnly
     ) throws IOException {
         User actor = sessionAuthService.requireRole(request, "SELLER", "ADMIN", "SUPER_ADMIN");
 
@@ -87,18 +151,32 @@ public class BaleController {
             sellerName = actor.getName();
         }
 
-        List<String> imageUrls = cloudinaryService.uploadImages(images);
+        MultipartFile[] nonEmptyImages = images == null
+                ? new MultipartFile[0]
+                : Arrays.stream(images)
+                .filter(file -> file != null && !file.isEmpty())
+                .toArray(MultipartFile[]::new);
+        boolean hasImages = nonEmptyImages.length > 0;
+        boolean hasVideo = video != null && !video.isEmpty();
 
-        if (imageUrls.isEmpty()) {
+        if (!hasImages && !hasVideo) {
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
-                    "message", "At least one image is required"
+                    "message", "Upload at least one image or one video"
             ));
         }
 
+        if ((explicitVideoOnly || !hasImages) && !isFashionRelated(name, category, type, description)) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "Video-only listings must be fashion related"
+            ));
+        }
+
+        List<String> imageUrls = hasImages ? cloudinaryService.uploadImages(nonEmptyImages) : List.of();
         String videoUrl = null;
 
-        if (video != null && !video.isEmpty()) {
+        if (hasVideo) {
             videoUrl = cloudinaryService.uploadVideo(video);
         }
 
@@ -117,6 +195,28 @@ public class BaleController {
                         videoUrl
                 )
         );
+    }
+
+    private boolean isFashionRelated(String name, String category, String type, String description) {
+        String combined = String.join(" ",
+                        safeValue(name),
+                        safeValue(category),
+                        safeValue(type),
+                        safeValue(description))
+                .toLowerCase();
+
+        List<String> fashionKeywords = List.of(
+                "fashion", "bale", "cloth", "clothes", "clothing", "apparel",
+                "dress", "shirt", "skirt", "trouser", "trousers", "jeans",
+                "hoodie", "jacket", "sneaker", "shoe", "bag", "handbag",
+                "boutique", "wear", "outfit", "kids wear", "ladies wear", "mens wear"
+        );
+
+        return fashionKeywords.stream().anyMatch(combined::contains);
+    }
+
+    private String safeValue(String value) {
+        return value == null ? "" : value.trim();
     }
 
     @PutMapping("/{id}/status")
