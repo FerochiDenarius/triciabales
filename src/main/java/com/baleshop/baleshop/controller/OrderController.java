@@ -179,6 +179,32 @@ public class OrderController {
             order.setPaymentStatus(updates.get("paymentStatus"));
         }
 
+        if (updates.containsKey("holdPayout") && "true".equalsIgnoreCase(updates.get("holdPayout"))) {
+            if (!"SUPER_ADMIN".equalsIgnoreCase(actor.getRole())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only SUPER_ADMIN can hold payouts");
+            }
+            if (!Boolean.TRUE.equals(order.getConfirmedByBuyer())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Buyer must confirm receipt before payout hold");
+            }
+
+            order.setPaymentStatus("payout_on_hold");
+            order.setPayoutHeldAt(LocalDateTime.now());
+            order.setPayoutHoldReason(updates.getOrDefault("payoutHoldReason", "Held by super admin"));
+        }
+
+        if (updates.containsKey("resumePayout") && "true".equalsIgnoreCase(updates.get("resumePayout"))) {
+            if (!"SUPER_ADMIN".equalsIgnoreCase(actor.getRole())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only SUPER_ADMIN can resume payouts");
+            }
+            if (!Boolean.TRUE.equals(order.getConfirmedByBuyer())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Buyer must confirm receipt before payout release");
+            }
+
+            order.setPaymentStatus("ready_for_payout");
+            order.setPayoutHeldAt(null);
+            order.setPayoutHoldReason(null);
+        }
+
         if (updates.containsKey("releasePayout") && "true".equals(updates.get("releasePayout"))) {
             if (!"SUPER_ADMIN".equalsIgnoreCase(actor.getRole())) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only SUPER_ADMIN can release payouts");
@@ -196,6 +222,8 @@ public class OrderController {
             order.setPaymentStatus("payout_released");
             order.setPayoutReleased(true);
             order.setPayoutReleasedAt(LocalDateTime.now());
+            order.setPayoutHeldAt(null);
+            order.setPayoutHoldReason(null);
         }
 
         orderRepository.save(order);

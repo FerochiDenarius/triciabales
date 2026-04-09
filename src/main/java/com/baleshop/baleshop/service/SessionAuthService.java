@@ -11,6 +11,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 
 @Service
@@ -29,7 +30,16 @@ public class SessionAuthService {
         UserToken session = userTokenService.findValidToken(token, UserToken.TYPE_AUTH_SESSION)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required"));
 
-        return session.getUser();
+        User user = session.getUser();
+        String accountStatus = user.getAccountStatus() == null
+                ? "ACTIVE"
+                : user.getAccountStatus().trim().toUpperCase(Locale.ROOT);
+
+        if (!"ACTIVE".equals(accountStatus)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This account is no longer allowed to access the platform");
+        }
+
+        return user;
     }
 
     public User requireRole(HttpServletRequest request, String... allowedRoles) {

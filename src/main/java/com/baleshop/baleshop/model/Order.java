@@ -39,6 +39,8 @@ public class Order {
     private Boolean confirmedByBuyer = false;
     private LocalDateTime buyerConfirmedAt;
     private LocalDateTime payoutReleasedAt;
+    private LocalDateTime payoutHeldAt;
+    private String payoutHoldReason;
 
     @ManyToOne
     @JoinColumn(name = "user_id")
@@ -251,6 +253,22 @@ public class Order {
 
     public void setPayoutReleasedAt(LocalDateTime payoutReleasedAt) {
         this.payoutReleasedAt = payoutReleasedAt;
+    }
+
+    public LocalDateTime getPayoutHeldAt() {
+        return payoutHeldAt;
+    }
+
+    public void setPayoutHeldAt(LocalDateTime payoutHeldAt) {
+        this.payoutHeldAt = payoutHeldAt;
+    }
+
+    public String getPayoutHoldReason() {
+        return payoutHoldReason;
+    }
+
+    public void setPayoutHoldReason(String payoutHoldReason) {
+        this.payoutHoldReason = payoutHoldReason;
     }
 
     public User getUser() {

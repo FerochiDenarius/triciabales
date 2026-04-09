@@ -39,6 +39,7 @@ public class User {
     private String accountStatus = "ACTIVE";
     private LocalDateTime suspendedAt;
     private LocalDateTime blockedAt;
+    private LocalDateTime deletedAt;
 
     public User() {}
 
@@ -240,5 +241,13 @@ public class User {
 
     public void setBlockedAt(LocalDateTime blockedAt) {
         this.blockedAt = blockedAt;
+    }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
     }
 }

@@ -122,6 +122,10 @@ public class UserController {
 
         String accountStatus = user.getAccountStatus() == null ? "ACTIVE" : user.getAccountStatus().trim().toUpperCase(Locale.ROOT);
 
+        if ("DELETED".equals(accountStatus)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This account has been deleted");
+        }
+
         if ("BLOCKED".equals(accountStatus)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This account has been blocked. Please contact support.");
         }
@@ -268,7 +272,7 @@ public class UserController {
                 ? request.getStatus().trim().toUpperCase(Locale.ROOT)
                 : "ACTIVE";
 
-        if (!"ACTIVE".equals(status) && !"SUSPENDED".equals(status) && !"BLOCKED".equals(status)) {
+        if (!"ACTIVE".equals(status) && !"SUSPENDED".equals(status) && !"BLOCKED".equals(status) && !"DELETED".equals(status)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid account status");
         }
 
@@ -277,15 +281,51 @@ public class UserController {
         if ("SUSPENDED".equals(status)) {
             user.setSuspendedAt(LocalDateTime.now());
             user.setBlockedAt(null);
+            user.setDeletedAt(null);
         } else if ("BLOCKED".equals(status)) {
             user.setBlockedAt(LocalDateTime.now());
             user.setSuspendedAt(null);
+            user.setDeletedAt(null);
+        } else if ("DELETED".equals(status)) {
+            user.setDeletedAt(LocalDateTime.now());
+            user.setSuspendedAt(null);
+            user.setBlockedAt(null);
         } else {
             user.setSuspendedAt(null);
             user.setBlockedAt(null);
+            user.setDeletedAt(null);
         }
 
         return ResponseEntity.ok(userRepository.save(user));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteUser(@PathVariable Long id, HttpServletRequest httpRequest) {
+        User actor = sessionAuthService.requireRole(httpRequest, "SUPER_ADMIN");
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        if (actor.getId().equals(user.getId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "You cannot delete your own super admin account");
+        }
+
+        user.setAccountStatus("DELETED");
+        user.setDeletedAt(LocalDateTime.now());
+        user.setSuspendedAt(null);
+        user.setBlockedAt(null);
+        user.setEmailVerified(false);
+        user.setPasswordResetRequestedAt(null);
+        userRepository.save(user);
+
+        return ResponseEntity.ok(
+                AuthResponse.of(
+                        true,
+                        "User deleted successfully",
+                        null,
+                        null,
+                        user
+                )
+        );
     }
 
     private String generateReferralCode() {
