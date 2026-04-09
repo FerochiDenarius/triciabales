@@ -16,6 +16,8 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -23,6 +25,12 @@ public class AccountEmailService {
 
     private static final Logger log = LoggerFactory.getLogger(AccountEmailService.class);
     private static final Duration MAILER_TIMEOUT = Duration.ofSeconds(30);
+    private static final ExecutorService MAIL_EXECUTOR = Executors.newCachedThreadPool(runnable -> {
+        Thread thread = new Thread(runnable);
+        thread.setName("baleshop-mailer");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     @Value("${spring.mail.from:${spring.mail.username:}}")
     private String fromAddress;
@@ -39,7 +47,7 @@ public class AccountEmailService {
     public String sendVerificationEmail(String email, String token) {
         String actionUrl = frontendBaseUrl + "/verify-email.html?token=" + token;
         log.info("Preparing verification email for {} using {}", email, actionUrl);
-        sendOrLog(
+        sendAsync(
                 email,
                 "Verify your Yenkasa Store account",
                 "Welcome to Yenkasa Store.\n\nVerify your email by opening this link:\n" + actionUrl,
@@ -51,13 +59,17 @@ public class AccountEmailService {
     public String sendPasswordResetEmail(String email, String token) {
         String actionUrl = frontendBaseUrl + "/reset-password.html?token=" + token;
         log.info("Preparing password reset email for {} using {}", email, actionUrl);
-        sendOrLog(
+        sendAsync(
                 email,
                 "Reset your Yenkasa Store password",
                 "We received a password reset request.\n\nReset your password using this link:\n" + actionUrl,
                 actionUrl
         );
         return actionUrl;
+    }
+
+    private void sendAsync(String to, String subject, String body, String actionUrl) {
+        MAIL_EXECUTOR.submit(() -> sendOrLog(to, subject, body, actionUrl));
     }
 
     private void sendOrLog(String to, String subject, String body, String actionUrl) {
