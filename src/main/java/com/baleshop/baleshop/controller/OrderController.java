@@ -9,9 +9,13 @@ import com.baleshop.baleshop.model.User;
 import com.baleshop.baleshop.repository.BaleRepository;
 import com.baleshop.baleshop.repository.OrderRepository;
 import com.baleshop.baleshop.repository.UserRepository;
+import com.baleshop.baleshop.service.SessionAuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -34,9 +38,12 @@ public class OrderController {
     private BaleRepository baleRepository;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private SessionAuthService sessionAuthService;
 
     @PostMapping("/checkout")
-    public Order checkout(@RequestBody CheckoutRequest request) {
+    public Order checkout(@RequestBody CheckoutRequest request, HttpServletRequest httpRequest) {
+        User authenticatedUser = sessionAuthService.requireAuthenticatedUser(httpRequest);
 
         Order order = new Order();
         order.setCustomerName(request.getCustomerName());
@@ -55,12 +62,7 @@ public class OrderController {
         order.setMomoNumber(request.getMomoNumber());
         order.setCardEmail(request.getCardEmail());
 
-        if (request.getUserId() != null) {
-            User user = userRepository.findById(request.getUserId())
-                    .orElseThrow(() -> new RuntimeException("User not found"));
-
-            order.setUser(user);
-        }
+        order.setUser(authenticatedUser);
 
         order.setDeliveryStatus("pending");
         order.setPaymentStatus(
@@ -118,25 +120,40 @@ public class OrderController {
     }
 
     @GetMapping
-    public List<Order> getAllOrders() {
+    public List<Order> getAllOrders(HttpServletRequest request) {
+        sessionAuthService.requireRole(request, "ADMIN", "SUPER_ADMIN");
         return orderRepository.findAll();
     }
 
     @GetMapping("/user/{userId}")
-    public List<Order> getUserOrders(@PathVariable Long userId) {
+    public List<Order> getUserOrders(@PathVariable Long userId, HttpServletRequest request) {
+        User actor = sessionAuthService.requireAuthenticatedUser(request);
+
+        if (!userId.equals(actor.getId()) && !"ADMIN".equalsIgnoreCase(actor.getRole()) && !"SUPER_ADMIN".equalsIgnoreCase(actor.getRole())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only view your own orders");
+        }
+
         return orderRepository.findByUserId(userId);
     }
 
     @GetMapping("/seller/{sellerId}")
-    public List<Order> getSellerOrders(@PathVariable Long sellerId) {
+    public List<Order> getSellerOrders(@PathVariable Long sellerId, HttpServletRequest request) {
+        User actor = sessionAuthService.requireAuthenticatedUser(request);
+
+        if (!sellerId.equals(actor.getId()) && !"ADMIN".equalsIgnoreCase(actor.getRole()) && !"SUPER_ADMIN".equalsIgnoreCase(actor.getRole())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only view your own seller orders");
+        }
+
         return orderRepository.findBySellerId(sellerId);
     }
 
     @PutMapping("/{id}/status")
     public ResponseEntity<Order> updateOrderStatus(
             @PathVariable Long id,
-            @RequestBody Map<String, String> updates
+            @RequestBody Map<String, String> updates,
+            HttpServletRequest request
     ) {
+        User actor = sessionAuthService.requireAuthenticatedUser(request);
         Optional<Order> optionalOrder = orderRepository.findById(id);
 
         if (optionalOrder.isEmpty()) {
@@ -145,17 +162,29 @@ public class OrderController {
 
         Order order = optionalOrder.get();
 
+        boolean isPrivileged = "ADMIN".equalsIgnoreCase(actor.getRole()) || "SUPER_ADMIN".equalsIgnoreCase(actor.getRole());
+        boolean isSellerOwner = "SELLER".equalsIgnoreCase(actor.getRole()) && actor.getId().equals(order.getSellerId());
+
         if (updates.containsKey("deliveryStatus")) {
+            if (!isSellerOwner && !isPrivileged) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have permission to update this order");
+            }
             order.setDeliveryStatus(updates.get("deliveryStatus"));
         }
 
         if (updates.containsKey("paymentStatus")) {
+            if (!isPrivileged) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have permission to update payment status");
+            }
             order.setPaymentStatus(updates.get("paymentStatus"));
         }
 
         if (updates.containsKey("releasePayout") && "true".equals(updates.get("releasePayout"))) {
+            if (!"SUPER_ADMIN".equalsIgnoreCase(actor.getRole())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only SUPER_ADMIN can release payouts");
+            }
             if (!Boolean.TRUE.equals(order.getConfirmedByBuyer())) {
-                return ResponseEntity.badRequest().build();
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Buyer must confirm receipt before payout");
             }
 
             double total = order.getTotal() != null ? order.getTotal() : 0.0;
@@ -175,7 +204,8 @@ public class OrderController {
     }
 
     @PutMapping("/{id}/confirm-received")
-    public ResponseEntity<Order> confirmOrderReceived(@PathVariable Long id) {
+    public ResponseEntity<Order> confirmOrderReceived(@PathVariable Long id, HttpServletRequest request) {
+        User actor = sessionAuthService.requireAuthenticatedUser(request);
         Optional<Order> optionalOrder = orderRepository.findById(id);
 
         if (optionalOrder.isEmpty()) {
@@ -183,6 +213,12 @@ public class OrderController {
         }
 
         Order order = optionalOrder.get();
+
+        if ((order.getUser() == null || !actor.getId().equals(order.getUser().getId()))
+                && !"ADMIN".equalsIgnoreCase(actor.getRole())
+                && !"SUPER_ADMIN".equalsIgnoreCase(actor.getRole())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only confirm your own orders");
+        }
 
         order.setConfirmedByBuyer(true);
         order.setBuyerConfirmedAt(LocalDateTime.now());

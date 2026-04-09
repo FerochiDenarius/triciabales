@@ -3,9 +3,13 @@ package com.baleshop.baleshop.controller;
 import com.baleshop.baleshop.dto.PayoutDetailsRequest;
 import com.baleshop.baleshop.model.User;
 import com.baleshop.baleshop.repository.UserRepository;
+import com.baleshop.baleshop.service.SessionAuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/seller")
@@ -14,9 +18,13 @@ public class SellerController {
 
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private SessionAuthService sessionAuthService;
 
     @PutMapping("/payout-details")
-    public ResponseEntity<User> updatePayoutDetails(@RequestBody PayoutDetailsRequest request) {
+    public ResponseEntity<User> updatePayoutDetails(@RequestBody PayoutDetailsRequest request, HttpServletRequest httpRequest) {
+        User actor = sessionAuthService.requireRole(httpRequest, "SELLER", "ADMIN", "SUPER_ADMIN");
+
         if (request.getUserId() == null) {
             return ResponseEntity.badRequest().build();
         }
@@ -26,6 +34,10 @@ public class SellerController {
 
         if (user == null) {
             return ResponseEntity.notFound().build();
+        }
+
+        if ("SELLER".equalsIgnoreCase(actor.getRole()) && !actor.getId().equals(user.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only update your own payout details");
         }
 
         user.setPayoutMethod(request.getPayoutMethod());

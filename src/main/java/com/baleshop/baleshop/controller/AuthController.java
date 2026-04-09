@@ -12,18 +12,9 @@ public class AuthController {
 
     @PostMapping("/login")
     public Map<String, Object> login(@RequestBody Map<String, String> data) {
-
-        String email = data.get("email");
-        String password = data.get("password");
-
         Map<String, Object> response = new HashMap<>();
-
-        if (email.equals("admin@triciabales.com") && password.equals("1234")) {
-            response.put("success", true);
-        } else {
-            response.put("success", false);
-        }
-
+        response.put("success", false);
+        response.put("message", "This legacy login route is disabled. Use /api/users/login instead.");
         return response;
     }
 }

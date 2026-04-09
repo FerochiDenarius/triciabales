@@ -3,6 +3,8 @@ package com.baleshop.baleshop.model;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "users")
 public class User {
@@ -31,6 +33,9 @@ public class User {
     private String bankAccountNumber;
     private String bankAccountName;
     private String paystackRecipientCode;
+    private Boolean emailVerified = false;
+    private LocalDateTime verificationSentAt;
+    private LocalDateTime passwordResetRequestedAt;
 
     public User() {}
 
@@ -184,5 +189,29 @@ public class User {
 
     public void setPaystackRecipientCode(String paystackRecipientCode) {
         this.paystackRecipientCode = paystackRecipientCode;
+    }
+
+    public Boolean getEmailVerified() {
+        return emailVerified;
+    }
+
+    public void setEmailVerified(Boolean emailVerified) {
+        this.emailVerified = emailVerified;
+    }
+
+    public LocalDateTime getVerificationSentAt() {
+        return verificationSentAt;
+    }
+
+    public void setVerificationSentAt(LocalDateTime verificationSentAt) {
+        this.verificationSentAt = verificationSentAt;
+    }
+
+    public LocalDateTime getPasswordResetRequestedAt() {
+        return passwordResetRequestedAt;
+    }
+
+    public void setPasswordResetRequestedAt(LocalDateTime passwordResetRequestedAt) {
+        this.passwordResetRequestedAt = passwordResetRequestedAt;
     }
 }
