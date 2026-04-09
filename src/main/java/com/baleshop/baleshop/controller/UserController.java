@@ -139,7 +139,27 @@ public class UserController {
         }
 
         if (!Boolean.TRUE.equals(user.getEmailVerified()) && !"SUPER_ADMIN".equalsIgnoreCase(user.getRole())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Please verify your email before logging in");
+
+            UserToken verificationToken = userTokenService.issueSingleUseToken(
+                    user,
+                    UserToken.TYPE_EMAIL_VERIFICATION,
+                    Duration.ofHours(24)
+            );
+
+            String actionUrl = accountEmailService.sendVerificationEmail(
+                    user.getEmail(),
+                    verificationToken.getToken()
+            );
+
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(
+                    AuthResponse.of(
+                            false,
+                            "Your email is not verified. We have sent you a new verification email.",
+                            null,
+                            actionUrl,
+                            null
+                    )
+            );
         }
 
         userRepository.save(user);
@@ -202,6 +222,43 @@ public class UserController {
                 AuthResponse.of(
                         true,
                         "If that email exists, a password reset link has been sent.",
+                        null,
+                        actionUrl,
+                        null
+                )
+        );
+    }
+
+    @PostMapping("/resend-verification")
+    public ResponseEntity<AuthResponse> resendVerification(@RequestBody PasswordResetRequest request) {
+        String actionUrl = null;
+
+        if (request.getEmail() != null && !request.getEmail().isBlank()) {
+            User user = userRepository.findByEmailIgnoreCase(request.getEmail()).orElse(null);
+
+            if (user != null && !Boolean.TRUE.equals(user.getEmailVerified())) {
+                String accountStatus = user.getAccountStatus() == null
+                        ? "ACTIVE"
+                        : user.getAccountStatus().trim().toUpperCase(Locale.ROOT);
+
+                if (!"DELETED".equals(accountStatus)) {
+                    user.setVerificationSentAt(LocalDateTime.now());
+                    userRepository.save(user);
+
+                    UserToken verificationToken = userTokenService.issueSingleUseToken(
+                            user,
+                            UserToken.TYPE_EMAIL_VERIFICATION,
+                            Duration.ofHours(24)
+                    );
+                    actionUrl = accountEmailService.sendVerificationEmail(user.getEmail(), verificationToken.getToken());
+                }
+            }
+        }
+
+        return ResponseEntity.ok(
+                AuthResponse.of(
+                        true,
+                        "If that account exists and is not yet verified, a new verification email has been sent.",
                         null,
                         actionUrl,
                         null
