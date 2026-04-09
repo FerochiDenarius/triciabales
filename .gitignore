@@ -28,6 +28,8 @@ target/
 build/
 !**/src/main/**/build/
 !**/src/test/**/build/
+ecosystem.local.config.js
+ecosystem.config.js
 
 ### VS Code ###
 .vscode/

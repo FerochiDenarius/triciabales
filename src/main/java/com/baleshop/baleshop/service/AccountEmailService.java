@@ -25,6 +25,7 @@ public class AccountEmailService {
 
     public String sendVerificationEmail(String email, String token) {
         String actionUrl = frontendBaseUrl + "/verify-email.html?token=" + token;
+        log.info("Preparing verification email for {} using {}", email, actionUrl);
         sendOrLog(
                 email,
                 "Verify your Yenkasa Store account",
@@ -36,6 +37,7 @@ public class AccountEmailService {
 
     public String sendPasswordResetEmail(String email, String token) {
         String actionUrl = frontendBaseUrl + "/reset-password.html?token=" + token;
+        log.info("Preparing password reset email for {} using {}", email, actionUrl);
         sendOrLog(
                 email,
                 "Reset your Yenkasa Store password",
@@ -60,6 +62,7 @@ public class AccountEmailService {
             message.setSubject(subject);
             message.setText(body);
             mailSender.send(message);
+            log.info("Email sent successfully to {} with subject {}", to, subject);
         } catch (Exception ex) {
             log.warn("Failed to send email to {}. Fallback link -> {}", to, actionUrl, ex);
         }
