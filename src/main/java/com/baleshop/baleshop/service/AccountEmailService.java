@@ -17,7 +17,7 @@ public class AccountEmailService {
     @Autowired
     private ObjectProvider<JavaMailSender> mailSenderProvider;
 
-    @Value("${spring.mail.username:}")
+    @Value("${spring.mail.from:${spring.mail.username:}}")
     private String fromAddress;
 
     @Value("${app.frontend-base-url:https://www.yenkasa.xyz/triciabales_frontend/landingFile}")
