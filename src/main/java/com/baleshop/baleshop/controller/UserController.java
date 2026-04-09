@@ -4,6 +4,7 @@ import com.baleshop.baleshop.dto.AuthRequest;
 import com.baleshop.baleshop.dto.AuthResponse;
 import com.baleshop.baleshop.dto.PasswordResetConfirmRequest;
 import com.baleshop.baleshop.dto.PasswordResetRequest;
+import com.baleshop.baleshop.dto.UserStatusUpdateRequest;
 import com.baleshop.baleshop.model.User;
 import com.baleshop.baleshop.model.UserToken;
 import com.baleshop.baleshop.repository.UserRepository;
@@ -75,6 +76,7 @@ public class UserController {
         user.setRole(requestedRole);
         user.setEmailVerified(false);
         user.setVerificationSentAt(LocalDateTime.now());
+        user.setAccountStatus("ACTIVE");
 
         if (referrer != null) {
             user.setReferredByCode(referrer.getReferralCode());
@@ -116,6 +118,16 @@ public class UserController {
 
         if (!passwordService.matches(request.getPassword(), user.getPassword())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
+        }
+
+        String accountStatus = user.getAccountStatus() == null ? "ACTIVE" : user.getAccountStatus().trim().toUpperCase(Locale.ROOT);
+
+        if ("BLOCKED".equals(accountStatus)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This account has been blocked. Please contact support.");
+        }
+
+        if ("SUSPENDED".equals(accountStatus)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This account has been suspended. Please contact support.");
         }
 
         if (passwordService.needsUpgrade(user.getPassword())) {
@@ -227,6 +239,53 @@ public class UserController {
                         null
                 )
         );
+    }
+
+    @GetMapping
+    public ResponseEntity<?> getAllUsers(HttpServletRequest request) {
+        sessionAuthService.requireRole(request, "SUPER_ADMIN");
+        return ResponseEntity.ok(userRepository.findAll());
+    }
+
+    @PutMapping("/{id}/status")
+    public ResponseEntity<User> updateUserStatus(
+            @PathVariable Long id,
+            @RequestBody UserStatusUpdateRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        User actor = sessionAuthService.requireRole(httpRequest, "SUPER_ADMIN");
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        if (actor.getId().equals(user.getId()) && request.getStatus() != null) {
+            String attemptedStatus = request.getStatus().trim().toUpperCase(Locale.ROOT);
+            if (!"ACTIVE".equals(attemptedStatus)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "You cannot suspend or block your own super admin account");
+            }
+        }
+
+        String status = request.getStatus() != null
+                ? request.getStatus().trim().toUpperCase(Locale.ROOT)
+                : "ACTIVE";
+
+        if (!"ACTIVE".equals(status) && !"SUSPENDED".equals(status) && !"BLOCKED".equals(status)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid account status");
+        }
+
+        user.setAccountStatus(status);
+
+        if ("SUSPENDED".equals(status)) {
+            user.setSuspendedAt(LocalDateTime.now());
+            user.setBlockedAt(null);
+        } else if ("BLOCKED".equals(status)) {
+            user.setBlockedAt(LocalDateTime.now());
+            user.setSuspendedAt(null);
+        } else {
+            user.setSuspendedAt(null);
+            user.setBlockedAt(null);
+        }
+
+        return ResponseEntity.ok(userRepository.save(user));
     }
 
     private String generateReferralCode() {

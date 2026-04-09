@@ -36,6 +36,9 @@ public class User {
     private Boolean emailVerified = false;
     private LocalDateTime verificationSentAt;
     private LocalDateTime passwordResetRequestedAt;
+    private String accountStatus = "ACTIVE";
+    private LocalDateTime suspendedAt;
+    private LocalDateTime blockedAt;
 
     public User() {}
 
@@ -213,5 +216,29 @@ public class User {
 
     public void setPasswordResetRequestedAt(LocalDateTime passwordResetRequestedAt) {
         this.passwordResetRequestedAt = passwordResetRequestedAt;
+    }
+
+    public String getAccountStatus() {
+        return accountStatus;
+    }
+
+    public void setAccountStatus(String accountStatus) {
+        this.accountStatus = accountStatus;
+    }
+
+    public LocalDateTime getSuspendedAt() {
+        return suspendedAt;
+    }
+
+    public void setSuspendedAt(LocalDateTime suspendedAt) {
+        this.suspendedAt = suspendedAt;
+    }
+
+    public LocalDateTime getBlockedAt() {
+        return blockedAt;
+    }
+
+    public void setBlockedAt(LocalDateTime blockedAt) {
+        this.blockedAt = blockedAt;
     }
 }
