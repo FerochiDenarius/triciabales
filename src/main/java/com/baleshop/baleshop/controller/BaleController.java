@@ -198,6 +198,12 @@ public class BaleController {
     }
 
     private boolean isFashionRelated(String name, String category, String type, String description) {
+        String normalizedType = safeValue(type).toLowerCase();
+
+        if ("single".equals(normalizedType) || "dress".equals(normalizedType) || "bale".equals(normalizedType)) {
+            return true;
+        }
+
         String combined = String.join(" ",
                         safeValue(name),
                         safeValue(category),
@@ -206,10 +212,11 @@ public class BaleController {
                 .toLowerCase();
 
         List<String> fashionKeywords = List.of(
-                "fashion", "bale", "cloth", "clothes", "clothing", "apparel",
-                "dress", "shirt", "skirt", "trouser", "trousers", "jeans",
-                "hoodie", "jacket", "sneaker", "shoe", "bag", "handbag",
-                "boutique", "wear", "outfit", "kids wear", "ladies wear", "mens wear"
+                "fashion", "bale", "single", "cloth", "clothes", "clothing", "apparel",
+                "dress", "shirt", "top", "blouse", "gown", "skirt", "trouser", "trousers",
+                "jeans", "hoodie", "jacket", "sneaker", "shoe", "bag", "handbag",
+                "boutique", "wear", "outfit", "ladies", "women", "women's", "mens", "men",
+                "kids", "kids wear", "ladies wear", "mens wear"
         );
 
         return fashionKeywords.stream().anyMatch(combined::contains);
@@ -217,6 +224,27 @@ public class BaleController {
 
     private String safeValue(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private String stringValue(Object value, String defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+
+        String text = value.toString().trim();
+        return text.isEmpty() ? defaultValue : text;
+    }
+
+    private double doubleValue(Object value, double defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+
+        try {
+            return Double.parseDouble(value.toString());
+        } catch (NumberFormatException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid product price");
+        }
     }
 
     @PutMapping("/{id}/status")
@@ -243,6 +271,55 @@ public class BaleController {
         baleRepository.save(bale);
 
         return ResponseEntity.ok(bale);
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<?> updateBale(
+            @PathVariable int id,
+            @RequestBody Map<String, Object> updates,
+            HttpServletRequest request
+    ) {
+        User actor = sessionAuthService.requireRole(request, "SELLER", "ADMIN", "SUPER_ADMIN");
+        Bale bale = baleRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bale not found"));
+
+        if ("SELLER".equalsIgnoreCase(actor.getRole()) && !actor.getId().equals(bale.getSellerId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only update your own products");
+        }
+
+        if (updates.containsKey("name")) {
+            bale.setName(stringValue(updates.get("name"), bale.getName()));
+        }
+
+        if (updates.containsKey("price")) {
+            bale.setPrice(doubleValue(updates.get("price"), bale.getPrice()));
+        }
+
+        if (updates.containsKey("weight")) {
+            bale.setWeight(stringValue(updates.get("weight"), bale.getWeight()));
+        }
+
+        if (updates.containsKey("category")) {
+            bale.setCategory(stringValue(updates.get("category"), bale.getCategory()));
+        }
+
+        if (updates.containsKey("description")) {
+            bale.setDescription(stringValue(updates.get("description"), bale.getDescription()));
+        }
+
+        if (updates.containsKey("status")) {
+            String status = stringValue(updates.get("status"), bale.getStatus());
+            if (!"available".equalsIgnoreCase(status) && !"preorder".equalsIgnoreCase(status) && !"sold".equalsIgnoreCase(status)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid product status");
+            }
+            bale.setStatus(status.toLowerCase());
+        }
+
+        if (updates.containsKey("type")) {
+            bale.setType(stringValue(updates.get("type"), bale.getType()));
+        }
+
+        return ResponseEntity.ok(baleRepository.save(bale));
     }
 
     @DeleteMapping("/{id}")
