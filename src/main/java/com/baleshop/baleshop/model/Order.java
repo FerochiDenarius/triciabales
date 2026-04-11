@@ -33,6 +33,11 @@ public class Order {
     private String momoNetwork;
     private String momoNumber;
     private String cardEmail;
+    private String paystackReference;
+    private String paystackAccessCode;
+    private String paystackAuthorizationUrl;
+    private String paystackGatewayResponse;
+    private LocalDateTime paidAt;
     private Double commissionAmount;
     private Double sellerPayoutAmount;
     private Boolean payoutReleased = false;
@@ -205,6 +210,46 @@ public class Order {
 
     public void setCardEmail(String cardEmail) {
         this.cardEmail = cardEmail;
+    }
+
+    public String getPaystackReference() {
+        return paystackReference;
+    }
+
+    public void setPaystackReference(String paystackReference) {
+        this.paystackReference = paystackReference;
+    }
+
+    public String getPaystackAccessCode() {
+        return paystackAccessCode;
+    }
+
+    public void setPaystackAccessCode(String paystackAccessCode) {
+        this.paystackAccessCode = paystackAccessCode;
+    }
+
+    public String getPaystackAuthorizationUrl() {
+        return paystackAuthorizationUrl;
+    }
+
+    public void setPaystackAuthorizationUrl(String paystackAuthorizationUrl) {
+        this.paystackAuthorizationUrl = paystackAuthorizationUrl;
+    }
+
+    public String getPaystackGatewayResponse() {
+        return paystackGatewayResponse;
+    }
+
+    public void setPaystackGatewayResponse(String paystackGatewayResponse) {
+        this.paystackGatewayResponse = paystackGatewayResponse;
+    }
+
+    public LocalDateTime getPaidAt() {
+        return paidAt;
+    }
+
+    public void setPaidAt(LocalDateTime paidAt) {
+        this.paidAt = paidAt;
     }
 
     public Double getCommissionAmount() {
