@@ -30,6 +30,7 @@ public class PaystackController {
         this.paystackService = paystackService;
         this.orderRepository = orderRepository;
         this.sessionAuthService = sessionAuthService;
+        System.out.println("✅ PaystackController loaded");
     }
 
     @PostMapping("/initialize")
@@ -89,5 +90,14 @@ public class PaystackController {
         }
 
         return null;
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Map<String, Object>> handlePaystackError(ResponseStatusException exception) {
+        return ResponseEntity.status(exception.getStatusCode()).body(Map.of(
+                "success", false,
+                "status", exception.getStatusCode().value(),
+                "error", exception.getReason() != null ? exception.getReason() : "Paystack request failed"
+        ));
     }
 }
