@@ -13,6 +13,8 @@ import com.baleshop.baleshop.service.PasswordService;
 import com.baleshop.baleshop.service.SessionAuthService;
 import com.baleshop.baleshop.service.UserTokenService;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -33,6 +35,8 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/users")
 @CrossOrigin(origins = "*")
 public class UserController {
+
+    private static final Logger log = LoggerFactory.getLogger(UserController.class);
 
     @Autowired
     private UserRepository userRepository;
@@ -239,9 +243,14 @@ public class UserController {
         String actionUrl = null;
 
         if (request.getEmail() != null && !request.getEmail().isBlank()) {
-            User user = userRepository.findByEmailIgnoreCase(request.getEmail()).orElse(null);
+            String requestedEmail = request.getEmail().trim();
+            User user = userRepository.findByEmailIgnoreCase(requestedEmail).orElse(null);
 
-            if (user != null && !Boolean.TRUE.equals(user.getEmailVerified())) {
+            if (user == null) {
+                log.info("Verification resend skipped for {}: account not found", requestedEmail);
+            } else if (Boolean.TRUE.equals(user.getEmailVerified())) {
+                log.info("Verification resend skipped for {}: account already verified", user.getEmail());
+            } else {
                 String accountStatus = user.getAccountStatus() == null
                         ? "ACTIVE"
                         : user.getAccountStatus().trim().toUpperCase(Locale.ROOT);
@@ -256,8 +265,13 @@ public class UserController {
                             Duration.ofHours(24)
                     );
                     actionUrl = accountEmailService.sendVerificationEmail(user.getEmail(), verificationToken.getToken());
+                    log.info("Verification resend queued for {}", user.getEmail());
+                } else {
+                    log.info("Verification resend skipped for {}: account deleted", user.getEmail());
                 }
             }
+        } else {
+            log.info("Verification resend skipped: email was blank");
         }
 
         return ResponseEntity.ok(
