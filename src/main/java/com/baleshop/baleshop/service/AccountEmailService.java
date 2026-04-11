@@ -35,7 +35,7 @@ public class AccountEmailService {
     @Value("${spring.mail.from:${spring.mail.username:}}")
     private String fromAddress;
 
-    @Value("${app.frontend-base-url:https://www.yenkasa.xyz/triciabales_frontend/landingFile}")
+    @Value("${app.frontend-base-url:https://www.yenkasa.xyz/store}")
     private String frontendBaseUrl;
 
     @Value("${app.mailer.node-binary:node}")
@@ -45,7 +45,7 @@ public class AccountEmailService {
     private String mailerScriptPath;
 
     public String sendVerificationEmail(String email, String token) {
-        String actionUrl = frontendBaseUrl + "/verify-email.html?token=" + token;
+        String actionUrl = frontendBaseUrl + "/verify-email?token=" + token;
         log.info("Preparing verification email for {} using {}", email, actionUrl);
         sendAsync(
                 email,
@@ -57,7 +57,7 @@ public class AccountEmailService {
     }
 
     public String sendPasswordResetEmail(String email, String token) {
-        String actionUrl = frontendBaseUrl + "/reset-password.html?token=" + token;
+        String actionUrl = frontendBaseUrl + "/reset-password?token=" + token;
         log.info("Preparing password reset email for {} using {}", email, actionUrl);
         sendAsync(
                 email,

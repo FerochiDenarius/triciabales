@@ -16,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -318,6 +319,48 @@ public class BaleController {
         if (updates.containsKey("type")) {
             bale.setType(stringValue(updates.get("type"), bale.getType()));
         }
+
+        return ResponseEntity.ok(baleRepository.save(bale));
+    }
+
+    @PutMapping("/{id}/media")
+    public ResponseEntity<?> updateBaleMedia(
+            @PathVariable int id,
+            HttpServletRequest request,
+            @RequestParam(value = "retainedImageUrls", required = false) List<String> retainedImageUrls,
+            @RequestParam(value = "image", required = false) MultipartFile[] images
+    ) throws IOException {
+        User actor = sessionAuthService.requireRole(request, "SELLER", "ADMIN", "SUPER_ADMIN");
+        Bale bale = baleRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bale not found"));
+
+        if ("SELLER".equalsIgnoreCase(actor.getRole()) && !actor.getId().equals(bale.getSellerId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only update your own products");
+        }
+
+        List<String> nextImageUrls = new ArrayList<>();
+
+        if (retainedImageUrls != null) {
+            retainedImageUrls.stream()
+                    .map(this::safeValue)
+                    .filter(url -> !url.isBlank())
+                    .forEach(nextImageUrls::add);
+        }
+
+        MultipartFile[] nonEmptyImages = images == null
+                ? new MultipartFile[0]
+                : Arrays.stream(images)
+                .filter(file -> file != null && !file.isEmpty())
+                .toArray(MultipartFile[]::new);
+
+        nextImageUrls.addAll(cloudinaryService.uploadImages(nonEmptyImages));
+
+        if (nextImageUrls.isEmpty() && (bale.getVideoUrl() == null || bale.getVideoUrl().isBlank())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product must keep at least one image or video");
+        }
+
+        bale.setImageUrls(nextImageUrls);
+        bale.setImageUrl(nextImageUrls.isEmpty() ? null : nextImageUrls.get(0));
 
         return ResponseEntity.ok(baleRepository.save(bale));
     }
