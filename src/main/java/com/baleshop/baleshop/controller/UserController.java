@@ -132,14 +132,17 @@ public class UserController {
         String accountStatus = user.getAccountStatus() == null ? "ACTIVE" : user.getAccountStatus().trim().toUpperCase(Locale.ROOT);
 
         if ("DELETED".equals(accountStatus)) {
+            log.info("Login denied for {}: account deleted", user.getEmail());
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This account has been deleted");
         }
 
         if ("BLOCKED".equals(accountStatus)) {
+            log.info("Login denied for {}: account blocked", user.getEmail());
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This account has been blocked. Please contact support.");
         }
 
         if ("SUSPENDED".equals(accountStatus)) {
+            log.info("Login denied for {}: account suspended", user.getEmail());
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This account has been suspended. Please contact support.");
         }
 
@@ -148,6 +151,7 @@ public class UserController {
         }
 
         if (!Boolean.TRUE.equals(user.getEmailVerified()) && !"SUPER_ADMIN".equalsIgnoreCase(user.getRole())) {
+            log.info("Login denied for {}: email not verified, queueing verification email", user.getEmail());
 
             UserToken verificationToken = userTokenService.issueSingleUseToken(
                     user,
