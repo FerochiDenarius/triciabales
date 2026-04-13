@@ -57,6 +57,9 @@ public class UserController {
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@RequestBody AuthRequest request) {
 
+        String requestedEmail = request.getEmail() == null ? "" : request.getEmail().trim();
+        log.info("Registration requested for {}", requestedEmail);
+
         Optional<User> existingUser = userRepository.findByEmailIgnoreCase(request.getEmail());
         User user = existingUser.orElseGet(User::new);
         boolean reactivatingDeletedAccount = existingUser
@@ -64,6 +67,9 @@ public class UserController {
                 .orElse(false);
 
         if (existingUser.isPresent() && !reactivatingDeletedAccount) {
+            log.info("Registration rejected for {}: email already exists with status {}",
+                    requestedEmail,
+                    normalizeValue(existingUser.get().getAccountStatus(), "ACTIVE"));
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
         }
 
@@ -115,6 +121,8 @@ public class UserController {
         User savedUser = userRepository.save(user);
         if (reactivatingDeletedAccount) {
             log.info("Reactivated deleted account during registration for {}", savedUser.getEmail());
+        } else {
+            log.info("Created new {} account for {}", savedUser.getRole(), savedUser.getEmail());
         }
 
         UserToken verificationToken = userTokenService.issueSingleUseToken(
@@ -123,6 +131,7 @@ public class UserController {
                 Duration.ofHours(24)
         );
         String actionUrl = accountEmailService.sendVerificationEmail(savedUser.getEmail(), verificationToken.getToken());
+        log.info("Verification email queued after registration for {}", savedUser.getEmail());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(
                 AuthResponse.of(
