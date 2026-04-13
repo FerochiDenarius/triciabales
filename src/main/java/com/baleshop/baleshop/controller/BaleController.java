@@ -77,6 +77,15 @@ public class BaleController {
             @RequestParam("description") String description,
             @RequestParam("status") String status,
             @RequestParam(value = "type", defaultValue = "bale") String type,
+            @RequestParam(value = "categoryType", required = false) String categoryType,
+            @RequestParam(value = "brand", required = false) String brand,
+            @RequestParam(value = "color", required = false) String color,
+            @RequestParam(value = "material", required = false) String material,
+            @RequestParam(value = "condition", required = false) String condition,
+            @RequestParam(value = "length", required = false) String length,
+            @RequestParam(value = "model", required = false) String model,
+            @RequestParam(value = "year", required = false) String year,
+            @RequestParam(value = "metadataJson", required = false) String metadataJson,
             @RequestParam(value = "sellerId", required = false) Long sellerId,
             @RequestParam(value = "sellerName", required = false) String sellerName,
             @RequestParam(value = "image", required = false) MultipartFile[] images,
@@ -91,6 +100,15 @@ public class BaleController {
                 description,
                 status,
                 type,
+                categoryType,
+                brand,
+                color,
+                material,
+                condition,
+                length,
+                model,
+                year,
+                metadataJson,
                 sellerId,
                 sellerName,
                 images,
@@ -109,6 +127,15 @@ public class BaleController {
             @RequestParam("description") String description,
             @RequestParam("status") String status,
             @RequestParam(value = "type", defaultValue = "product_video") String type,
+            @RequestParam(value = "categoryType", required = false) String categoryType,
+            @RequestParam(value = "brand", required = false) String brand,
+            @RequestParam(value = "color", required = false) String color,
+            @RequestParam(value = "material", required = false) String material,
+            @RequestParam(value = "condition", required = false) String condition,
+            @RequestParam(value = "length", required = false) String length,
+            @RequestParam(value = "model", required = false) String model,
+            @RequestParam(value = "year", required = false) String year,
+            @RequestParam(value = "metadataJson", required = false) String metadataJson,
             @RequestParam(value = "sellerId", required = false) Long sellerId,
             @RequestParam(value = "sellerName", required = false) String sellerName,
             @RequestParam("video") MultipartFile video
@@ -122,6 +149,15 @@ public class BaleController {
                 description,
                 status,
                 type,
+                categoryType,
+                brand,
+                color,
+                material,
+                condition,
+                length,
+                model,
+                year,
+                metadataJson,
                 sellerId,
                 sellerName,
                 null,
@@ -139,6 +175,15 @@ public class BaleController {
             String description,
             String status,
             String type,
+            String categoryType,
+            String brand,
+            String color,
+            String material,
+            String condition,
+            String length,
+            String model,
+            String year,
+            String metadataJson,
             Long sellerId,
             String sellerName,
             MultipartFile[] images,
@@ -193,6 +238,15 @@ public class BaleController {
                         description,
                         status,
                         type,
+                        stringValue(categoryType, type),
+                        safeValue(brand),
+                        safeValue(color),
+                        safeValue(material),
+                        safeValue(condition),
+                        safeValue(length),
+                        safeValue(model),
+                        safeValue(year),
+                        safeValue(metadataJson),
                         sellerId,
                         sellerName,
                         imageUrls,
@@ -204,7 +258,16 @@ public class BaleController {
     private boolean isFashionRelated(String name, String category, String type, String description) {
         String normalizedType = safeValue(type).toLowerCase();
 
-        if ("single".equals(normalizedType) || "dress".equals(normalizedType) || "bale".equals(normalizedType)) {
+        if (
+                "single".equals(normalizedType) ||
+                        "dress".equals(normalizedType) ||
+                        "bale".equals(normalizedType) ||
+                        "shoe".equals(normalizedType) ||
+                        "bag".equals(normalizedType) ||
+                        "wig".equals(normalizedType) ||
+                        "fabric".equals(normalizedType) ||
+                        "accessory".equals(normalizedType)
+        ) {
             return true;
         }
 
@@ -220,7 +283,8 @@ public class BaleController {
                 "dress", "shirt", "top", "blouse", "gown", "skirt", "trouser", "trousers",
                 "jeans", "hoodie", "jacket", "sneaker", "shoe", "bag", "handbag",
                 "boutique", "wear", "outfit", "ladies", "women", "women's", "mens", "men",
-                "kids", "kids wear", "ladies wear", "mens wear"
+                "kids", "kids wear", "ladies wear", "mens wear", "wig", "hair", "human hair",
+                "fabric", "textile", "material", "accessory", "accessories"
         );
 
         return fashionKeywords.stream().anyMatch(combined::contains);
@@ -340,6 +404,42 @@ public class BaleController {
 
         if (updates.containsKey("type")) {
             bale.setType(stringValue(updates.get("type"), bale.getType()));
+        }
+
+        if (updates.containsKey("categoryType")) {
+            bale.setCategoryType(stringValue(updates.get("categoryType"), bale.getCategoryType()));
+        }
+
+        if (updates.containsKey("brand")) {
+            bale.setBrand(stringValue(updates.get("brand"), bale.getBrand()));
+        }
+
+        if (updates.containsKey("color")) {
+            bale.setColor(stringValue(updates.get("color"), bale.getColor()));
+        }
+
+        if (updates.containsKey("material")) {
+            bale.setMaterial(stringValue(updates.get("material"), bale.getMaterial()));
+        }
+
+        if (updates.containsKey("condition")) {
+            bale.setCondition(stringValue(updates.get("condition"), bale.getCondition()));
+        }
+
+        if (updates.containsKey("length")) {
+            bale.setLength(stringValue(updates.get("length"), bale.getLength()));
+        }
+
+        if (updates.containsKey("model")) {
+            bale.setModel(stringValue(updates.get("model"), bale.getModel()));
+        }
+
+        if (updates.containsKey("year")) {
+            bale.setYear(stringValue(updates.get("year"), bale.getYear()));
+        }
+
+        if (updates.containsKey("metadataJson")) {
+            bale.setMetadataJson(stringValue(updates.get("metadataJson"), bale.getMetadataJson()));
         }
 
         return ResponseEntity.ok(baleRepository.save(bale));

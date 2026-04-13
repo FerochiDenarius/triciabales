@@ -29,6 +29,15 @@ public class BaleService {
             String description,
             String status,
             String type,
+            String categoryType,
+            String brand,
+            String color,
+            String material,
+            String condition,
+            String length,
+            String model,
+            String year,
+            String metadataJson,
             Long sellerId,
             String sellerName,
             List<String> imageUrls,
@@ -42,6 +51,15 @@ public class BaleService {
         bale.setDescription(description);
         bale.setStatus(status);
         bale.setType(type);
+        bale.setCategoryType(categoryType);
+        bale.setBrand(brand);
+        bale.setColor(color);
+        bale.setMaterial(material);
+        bale.setCondition(condition);
+        bale.setLength(length);
+        bale.setModel(model);
+        bale.setYear(year);
+        bale.setMetadataJson(metadataJson);
         bale.setSellerId(sellerId);
         bale.setSellerName(sellerName);
         bale.setImageUrls(imageUrls);
