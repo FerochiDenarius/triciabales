@@ -9,6 +9,7 @@ import com.baleshop.baleshop.model.User;
 import com.baleshop.baleshop.model.UserToken;
 import com.baleshop.baleshop.repository.UserRepository;
 import com.baleshop.baleshop.service.AccountEmailService;
+import com.baleshop.baleshop.service.CloudinaryService;
 import com.baleshop.baleshop.service.PasswordService;
 import com.baleshop.baleshop.service.SessionAuthService;
 import com.baleshop.baleshop.service.UserTokenService;
@@ -19,8 +20,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Comparator;
@@ -53,6 +56,9 @@ public class UserController {
 
     @Autowired
     private SessionAuthService sessionAuthService;
+
+    @Autowired
+    private CloudinaryService cloudinaryService;
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@RequestBody AuthRequest request) {
@@ -232,6 +238,83 @@ public class UserController {
                         null,
                         null,
                         user
+                )
+        );
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<User> getMyProfile(HttpServletRequest request) {
+        return ResponseEntity.ok(sessionAuthService.requireAuthenticatedUser(request));
+    }
+
+    @PutMapping("/me")
+    public ResponseEntity<AuthResponse> updateMyProfile(
+            HttpServletRequest request,
+            @RequestParam(value = "name", required = false) String name,
+            @RequestParam(value = "email", required = false) String email,
+            @RequestParam(value = "phone", required = false) String phone,
+            @RequestParam(value = "address", required = false) String address,
+            @RequestParam(value = "password", required = false) String password,
+            @RequestParam(value = "profileImage", required = false) MultipartFile profileImage
+    ) throws IOException {
+        User user = sessionAuthService.requireAuthenticatedUser(request);
+        String verificationActionUrl = null;
+
+        if (name != null) {
+            user.setName(name.trim());
+        }
+
+        if (phone != null) {
+            user.setPhone(phone.trim());
+        }
+
+        if (address != null) {
+            user.setAddress(address.trim());
+        }
+
+        if (password != null && !password.isBlank()) {
+            user.setPassword(passwordService.encode(password));
+        }
+
+        if (profileImage != null && !profileImage.isEmpty()) {
+            user.setProfileImageUrl(cloudinaryService.uploadProfileImage(profileImage));
+        }
+
+        if (email != null && !email.isBlank() && !email.equalsIgnoreCase(user.getEmail())) {
+            String nextEmail = email.trim();
+            Optional<User> existingUser = userRepository.findByEmailIgnoreCase(nextEmail);
+
+            if (existingUser.isPresent() && !existingUser.get().getId().equals(user.getId())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
+            }
+
+            user.setEmail(nextEmail);
+            user.setEmailVerified(false);
+            user.setVerificationSentAt(LocalDateTime.now());
+        }
+
+        User savedUser = userRepository.save(user);
+        log.info("Profile updated for {} role={}", savedUser.getEmail(), savedUser.getRole());
+
+        if (!Boolean.TRUE.equals(savedUser.getEmailVerified()) && !"SUPER_ADMIN".equalsIgnoreCase(savedUser.getRole())) {
+            UserToken verificationToken = userTokenService.issueSingleUseToken(
+                    savedUser,
+                    UserToken.TYPE_EMAIL_VERIFICATION,
+                    Duration.ofHours(24)
+            );
+            verificationActionUrl = accountEmailService.sendVerificationEmail(savedUser.getEmail(), verificationToken.getToken());
+            log.info("Verification email queued after profile update for {}", savedUser.getEmail());
+        }
+
+        return ResponseEntity.ok(
+                AuthResponse.of(
+                        true,
+                        verificationActionUrl == null
+                                ? "Profile updated successfully."
+                                : "Profile updated. Please verify your email address.",
+                        null,
+                        verificationActionUrl,
+                        savedUser
                 )
         );
     }

@@ -19,6 +19,7 @@ public class User {
     private String password;
     private String phone;
     private String address;
+    private String profileImageUrl;
     private String role; // BUYER or SELLER
     @Column(unique = true)
     private String referralCode;
@@ -89,6 +90,14 @@ public class User {
 
     public void setAddress(String address) {
         this.address = address;
+    }
+
+    public String getProfileImageUrl() {
+        return profileImageUrl;
+    }
+
+    public void setProfileImageUrl(String profileImageUrl) {
+        this.profileImageUrl = profileImageUrl;
     }
 
     public String getRole() {

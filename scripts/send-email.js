@@ -51,6 +51,18 @@ function parseSender(sender) {
   };
 }
 
+function buildZeptoAuthorizationHeader() {
+  const token = process.env.ZEPTOMAIL_SEND_MAIL_TOKEN;
+  if (!token) {
+    return null;
+  }
+
+  const trimmed = token.trim();
+  return trimmed.toLowerCase().startsWith('zoho-enczapikey ')
+    ? trimmed
+    : `Zoho-enczapikey ${trimmed}`;
+}
+
 function buildHtml(subject, text, actionUrl) {
   const escapedSubject = escapeHtml(subject);
   const escapedText = escapeHtml(text).replace(/\n/g, '<br>');
@@ -74,8 +86,8 @@ function buildHtml(subject, text, actionUrl) {
 }
 
 async function sendViaZeptoMail(payload) {
-  const token = process.env.ZEPTOMAIL_SEND_MAIL_TOKEN;
-  if (!token) {
+  const authorization = buildZeptoAuthorizationHeader();
+  if (!authorization) {
     return null;
   }
 
@@ -90,7 +102,7 @@ async function sendViaZeptoMail(payload) {
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
-        Authorization: `Zoho-enczapikey ${token}`
+        Authorization: authorization
       },
       body: JSON.stringify({
         from: {

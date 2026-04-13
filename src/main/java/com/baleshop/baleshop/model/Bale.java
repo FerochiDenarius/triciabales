@@ -34,6 +34,10 @@ public class Bale {
     private String type = "bale";
     private Long sellerId;
     private String sellerName;
+    @Transient
+    private String sellerProfileImageUrl;
+    @Transient
+    private String sellerPhone;
 
     // ✅ Default constructor (REQUIRED by JPA)
     public Bale() {
@@ -157,5 +161,21 @@ public class Bale {
 
     public void setSellerName(String sellerName) {
         this.sellerName = sellerName;
+    }
+
+    public String getSellerProfileImageUrl() {
+        return sellerProfileImageUrl;
+    }
+
+    public void setSellerProfileImageUrl(String sellerProfileImageUrl) {
+        this.sellerProfileImageUrl = sellerProfileImageUrl;
+    }
+
+    public String getSellerPhone() {
+        return sellerPhone;
+    }
+
+    public void setSellerPhone(String sellerPhone) {
+        this.sellerPhone = sellerPhone;
     }
 }

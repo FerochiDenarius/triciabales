@@ -3,6 +3,7 @@ package com.baleshop.baleshop.controller;
 import com.baleshop.baleshop.model.Bale;
 import com.baleshop.baleshop.model.User;
 import com.baleshop.baleshop.repository.BaleRepository;
+import com.baleshop.baleshop.repository.UserRepository;
 import com.baleshop.baleshop.service.BaleService;
 import com.baleshop.baleshop.service.SessionAuthService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,11 +36,13 @@ public class BaleController {
     private CloudinaryService cloudinaryService;
     @Autowired
     private SessionAuthService sessionAuthService;
+    @Autowired
+    private UserRepository userRepository;
 
     // ✅ GET all bales
     @GetMapping
     public List<Bale> getAllBales() {
-        return service.getAllBales();
+        return enrichSellerDetails(service.getAllBales());
     }
 
     @GetMapping("/seller/{sellerId}")
@@ -54,7 +57,7 @@ public class BaleController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have permission to view seller products");
         }
 
-        return baleRepository.findBySellerId(sellerId);
+        return enrichSellerDetails(baleRepository.findBySellerId(sellerId));
     }
 
     // ✅ OLD method (keep it if needed)
@@ -221,6 +224,25 @@ public class BaleController {
         );
 
         return fashionKeywords.stream().anyMatch(combined::contains);
+    }
+
+    private List<Bale> enrichSellerDetails(List<Bale> bales) {
+        bales.forEach(this::enrichSellerDetails);
+        return bales;
+    }
+
+    private Bale enrichSellerDetails(Bale bale) {
+        if (bale == null || bale.getSellerId() == null) {
+            return bale;
+        }
+
+        userRepository.findById(bale.getSellerId()).ifPresent(seller -> {
+            bale.setSellerName(seller.getName());
+            bale.setSellerPhone(seller.getPhone());
+            bale.setSellerProfileImageUrl(seller.getProfileImageUrl());
+        });
+
+        return bale;
     }
 
     private String safeValue(String value) {

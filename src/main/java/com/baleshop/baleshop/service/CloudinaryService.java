@@ -28,6 +28,17 @@ public class CloudinaryService {
         return uploadResult.get("secure_url").toString();
     }
 
+    public String uploadProfileImage(MultipartFile file) throws IOException {
+        Map uploadResult = cloudinary.uploader().upload(
+                file.getBytes(),
+                ObjectUtils.asMap(
+                        "folder", "bales/profiles"
+                )
+        );
+
+        return uploadResult.get("secure_url").toString();
+    }
+
     public List<String> uploadImages(MultipartFile[] files) throws IOException {
         List<String> imageUrls = new ArrayList<>();
 
