@@ -28,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -56,7 +57,13 @@ public class UserController {
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@RequestBody AuthRequest request) {
 
-        if (userRepository.findByEmailIgnoreCase(request.getEmail()).isPresent()) {
+        Optional<User> existingUser = userRepository.findByEmailIgnoreCase(request.getEmail());
+        User user = existingUser.orElseGet(User::new);
+        boolean reactivatingDeletedAccount = existingUser
+                .map(existing -> "DELETED".equals(normalizeValue(existing.getAccountStatus(), "ACTIVE")))
+                .orElse(false);
+
+        if (existingUser.isPresent() && !reactivatingDeletedAccount) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
         }
 
@@ -75,17 +82,22 @@ public class UserController {
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid referral code"));
         }
 
-        User user = new User();
         user.setName(request.getName());
         user.setEmail(request.getEmail());
         user.setPassword(passwordService.encode(request.getPassword()));
         user.setPhone(request.getPhone());
         user.setAddress(request.getAddress());
-        user.setReferralCode(generateReferralCode());
+        if (user.getReferralCode() == null || user.getReferralCode().isBlank()) {
+            user.setReferralCode(generateReferralCode());
+        }
         user.setRole(requestedRole);
         user.setEmailVerified(false);
         user.setVerificationSentAt(LocalDateTime.now());
         user.setAccountStatus("ACTIVE");
+        user.setDeletedAt(null);
+        user.setSuspendedAt(null);
+        user.setBlockedAt(null);
+        user.setPasswordResetRequestedAt(null);
 
         if (referrer != null) {
             user.setReferredByCode(referrer.getReferralCode());
@@ -101,6 +113,10 @@ public class UserController {
         }
 
         User savedUser = userRepository.save(user);
+        if (reactivatingDeletedAccount) {
+            log.info("Reactivated deleted account during registration for {}", savedUser.getEmail());
+        }
+
         UserToken verificationToken = userTokenService.issueSingleUseToken(
                 savedUser,
                 UserToken.TYPE_EMAIL_VERIFICATION,
