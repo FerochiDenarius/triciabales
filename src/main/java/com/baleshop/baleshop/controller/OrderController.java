@@ -284,9 +284,45 @@ public class OrderController {
         return ResponseEntity.ok(order);
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> deleteUnpaidOrder(@PathVariable Long id, HttpServletRequest request) {
+        User actor = sessionAuthService.requireRole(request, "SUPER_ADMIN");
+        Order order = orderRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+
+        if (isPaidOrder(order)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Paid orders cannot be deleted");
+        }
+
+        orderRepository.delete(order);
+        notificationService.notifySensitiveActivity(
+                actor,
+                "Unpaid order deleted",
+                actor.getEmail() + " deleted unpaid order #" + id + "."
+        );
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Unpaid order deleted successfully",
+                "orderId", id
+        ));
+    }
+
     private List<Order> sortOrdersByNewestFirst(List<Order> orders) {
         return orders.stream()
                 .sorted(Comparator.comparing(Order::getId, Comparator.nullsLast(Long::compareTo)).reversed())
                 .toList();
+    }
+
+    private boolean isPaidOrder(Order order) {
+        String paymentStatus = order.getPaymentStatus() == null ? "" : order.getPaymentStatus().trim();
+        String status = order.getStatus() == null ? "" : order.getStatus().trim();
+
+        return "paid".equalsIgnoreCase(paymentStatus)
+                || "ready_for_payout".equalsIgnoreCase(paymentStatus)
+                || "payout_on_hold".equalsIgnoreCase(paymentStatus)
+                || "payout_released".equalsIgnoreCase(paymentStatus)
+                || "paid".equalsIgnoreCase(status)
+                || order.getPaidAt() != null;
     }
 }

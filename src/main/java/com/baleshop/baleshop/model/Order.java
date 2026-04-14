@@ -53,6 +53,7 @@ public class Order {
     private Double sellerPayoutAmount;
     private Boolean payoutReleased = false;
     private Boolean confirmedByBuyer = false;
+    private LocalDateTime createdAt;
     private LocalDateTime buyerConfirmedAt;
     private LocalDateTime payoutReleasedAt;
     private LocalDateTime payoutHeldAt;
@@ -68,6 +69,13 @@ public class Order {
 
     // Constructors
     public Order() {
+    }
+
+    @PrePersist
+    public void beforeCreate() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
     }
 
     // Getters and Setters
@@ -373,6 +381,14 @@ public class Order {
 
     public void setConfirmedByBuyer(Boolean confirmedByBuyer) {
         this.confirmedByBuyer = confirmedByBuyer;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
     }
 
     public LocalDateTime getBuyerConfirmedAt() {
