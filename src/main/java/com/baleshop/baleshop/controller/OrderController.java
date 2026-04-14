@@ -182,6 +182,11 @@ public class OrderController {
             }
             order.setDeliveryStatus(updates.get("deliveryStatus"));
             deliveryStatusChanged = true;
+
+            if ("delivered".equalsIgnoreCase(order.getDeliveryStatus()) && canMoveDeliveredOrderToPayoutQueue(order)) {
+                order.setPaymentStatus("ready_for_payout");
+                payoutChanged = true;
+            }
         }
 
         if (updates.containsKey("paymentStatus")) {
@@ -196,8 +201,8 @@ public class OrderController {
             if (!"SUPER_ADMIN".equalsIgnoreCase(actor.getRole())) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only SUPER_ADMIN can hold payouts");
             }
-            if (!Boolean.TRUE.equals(order.getConfirmedByBuyer())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Buyer must confirm receipt before payout hold");
+            if (!isPayoutReleaseEligible(order)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order must be delivered or confirmed by buyer before payout hold");
             }
 
             order.setPaymentStatus("payout_on_hold");
@@ -210,8 +215,8 @@ public class OrderController {
             if (!"SUPER_ADMIN".equalsIgnoreCase(actor.getRole())) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only SUPER_ADMIN can resume payouts");
             }
-            if (!Boolean.TRUE.equals(order.getConfirmedByBuyer())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Buyer must confirm receipt before payout release");
+            if (!isPayoutReleaseEligible(order)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order must be delivered or confirmed by buyer before payout release");
             }
 
             order.setPaymentStatus("ready_for_payout");
@@ -224,8 +229,8 @@ public class OrderController {
             if (!"SUPER_ADMIN".equalsIgnoreCase(actor.getRole())) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only SUPER_ADMIN can release payouts");
             }
-            if (!Boolean.TRUE.equals(order.getConfirmedByBuyer())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Buyer must confirm receipt before payout");
+            if (!isPayoutReleaseEligible(order)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order must be delivered or confirmed by buyer before payout");
             }
 
             double total = order.getTotal() != null ? order.getTotal() : 0.0;
@@ -324,5 +329,20 @@ public class OrderController {
                 || "payout_released".equalsIgnoreCase(paymentStatus)
                 || "paid".equalsIgnoreCase(status)
                 || order.getPaidAt() != null;
+    }
+
+    private boolean canMoveDeliveredOrderToPayoutQueue(Order order) {
+        String paymentStatus = order.getPaymentStatus() == null ? "" : order.getPaymentStatus().trim();
+
+        return isPaidOrder(order)
+                && !"ready_for_payout".equalsIgnoreCase(paymentStatus)
+                && !"payout_on_hold".equalsIgnoreCase(paymentStatus)
+                && !"payout_released".equalsIgnoreCase(paymentStatus)
+                && !Boolean.TRUE.equals(order.getPayoutReleased());
+    }
+
+    private boolean isPayoutReleaseEligible(Order order) {
+        return Boolean.TRUE.equals(order.getConfirmedByBuyer())
+                || "delivered".equalsIgnoreCase(order.getDeliveryStatus());
     }
 }
