@@ -21,9 +21,11 @@ public class Bale {
     private String brand;
     private String color;
     private String material;
+    @Column(name = "product_condition")
     private String condition;
     private String length;
     private String model;
+    @Column(name = "product_year")
     private String year;
 
     @Column(columnDefinition = "TEXT")
