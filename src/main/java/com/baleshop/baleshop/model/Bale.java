@@ -17,18 +17,24 @@ public class Bale {
     private String weight;
     private String category;
     private String description;
+    @Column(name = "category_type")
     private String categoryType;
+    @Column(name = "product_brand")
     private String brand;
+    @Column(name = "product_color")
     private String color;
+    @Column(name = "product_material")
     private String material;
     @Column(name = "product_condition")
     private String condition;
+    @Column(name = "product_length")
     private String length;
+    @Column(name = "product_model")
     private String model;
     @Column(name = "product_year")
     private String year;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "metadata_json", columnDefinition = "TEXT")
     private String metadataJson;
 
 
