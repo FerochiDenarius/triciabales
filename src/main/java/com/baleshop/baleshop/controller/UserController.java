@@ -10,6 +10,7 @@ import com.baleshop.baleshop.model.UserToken;
 import com.baleshop.baleshop.repository.UserRepository;
 import com.baleshop.baleshop.service.AccountEmailService;
 import com.baleshop.baleshop.service.CloudinaryService;
+import com.baleshop.baleshop.service.NotificationService;
 import com.baleshop.baleshop.service.PasswordService;
 import com.baleshop.baleshop.service.SessionAuthService;
 import com.baleshop.baleshop.service.UserTokenService;
@@ -59,6 +60,9 @@ public class UserController {
 
     @Autowired
     private CloudinaryService cloudinaryService;
+
+    @Autowired
+    private NotificationService notificationService;
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@RequestBody AuthRequest request) {
@@ -154,9 +158,13 @@ public class UserController {
     public ResponseEntity<AuthResponse> login(@RequestBody AuthRequest request) {
 
         User user = userRepository.findByEmailIgnoreCase(request.getEmail())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password"));
+                .orElseThrow(() -> {
+                    log.info("Login denied for {}: account not found", request.getEmail());
+                    return new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
+                });
 
         if (!passwordService.matches(request.getPassword(), user.getPassword())) {
+            log.info("Login denied for {}: password mismatch", user.getEmail());
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
         }
 
@@ -209,6 +217,15 @@ public class UserController {
         userRepository.save(user);
 
         String sessionToken = sessionAuthService.issueSession(user);
+        log.info("Login successful for {} role={}", user.getEmail(), user.getRole());
+
+        if ("SUPER_ADMIN".equalsIgnoreCase(user.getRole())) {
+            notificationService.notifySensitiveActivity(
+                    user,
+                    "Super admin login",
+                    "Super admin " + user.getEmail() + " logged in."
+            );
+        }
 
         return ResponseEntity.ok(
                 AuthResponse.of(
@@ -274,6 +291,11 @@ public class UserController {
 
         if (password != null && !password.isBlank()) {
             user.setPassword(passwordService.encode(password));
+            notificationService.notifySensitiveActivity(
+                    user,
+                    "Password changed",
+                    "Password was changed for account " + user.getEmail() + "."
+            );
         }
 
         if (profileImage != null && !profileImage.isEmpty()) {
@@ -281,6 +303,7 @@ public class UserController {
         }
 
         if (email != null && !email.isBlank() && !email.equalsIgnoreCase(user.getEmail())) {
+            String previousEmail = user.getEmail();
             String nextEmail = email.trim();
             Optional<User> existingUser = userRepository.findByEmailIgnoreCase(nextEmail);
 
@@ -291,6 +314,11 @@ public class UserController {
             user.setEmail(nextEmail);
             user.setEmailVerified(false);
             user.setVerificationSentAt(LocalDateTime.now());
+            notificationService.notifySensitiveActivity(
+                    user,
+                    "Email address changed",
+                    "Account email changed from " + previousEmail + " to " + nextEmail + "."
+            );
         }
 
         User savedUser = userRepository.save(user);
@@ -543,7 +571,14 @@ public class UserController {
             user.setDeletedAt(null);
         }
 
-        return ResponseEntity.ok(userRepository.save(user));
+        User savedUser = userRepository.save(user);
+        notificationService.notifySensitiveActivity(
+                actor,
+                "User status changed",
+                actor.getEmail() + " changed " + savedUser.getEmail() + " status to " + savedUser.getAccountStatus() + "."
+        );
+
+        return ResponseEntity.ok(savedUser);
     }
 
     @DeleteMapping("/{id}")
@@ -563,6 +598,11 @@ public class UserController {
         user.setEmailVerified(false);
         user.setPasswordResetRequestedAt(null);
         userRepository.save(user);
+        notificationService.notifySensitiveActivity(
+                actor,
+                "User deleted",
+                actor.getEmail() + " deleted user account " + user.getEmail() + "."
+        );
 
         return ResponseEntity.ok(
                 AuthResponse.of(

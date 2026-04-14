@@ -68,6 +68,15 @@ public class AccountEmailService {
         return actionUrl;
     }
 
+    public void sendNotificationEmail(String email, String subject, String body) {
+        if (email == null || email.isBlank()) {
+            return;
+        }
+
+        log.info("Preparing notification email for {} subject={}", email, subject);
+        sendAsync(email, subject, body, frontendBaseUrl);
+    }
+
     private void sendAsync(String to, String subject, String body, String actionUrl) {
         MAIL_EXECUTOR.submit(() -> sendOrLog(to, subject, body, actionUrl));
     }

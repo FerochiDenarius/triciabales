@@ -36,6 +36,7 @@ public class PaystackService {
     private static final String PAYSTACK_BASE_URL = "https://api.paystack.co";
 
     private final OrderRepository orderRepository;
+    private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
@@ -45,8 +46,13 @@ public class PaystackService {
     @Value("${app.frontend-base-url:https://www.yenkasa.xyz/store}")
     private String frontendBaseUrl;
 
-    public PaystackService(OrderRepository orderRepository, ObjectMapper objectMapper) {
+    public PaystackService(
+            OrderRepository orderRepository,
+            NotificationService notificationService,
+            ObjectMapper objectMapper
+    ) {
         this.orderRepository = orderRepository;
+        this.notificationService = notificationService;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(20))
@@ -205,6 +211,7 @@ public class PaystackService {
         order.setPaystackGatewayResponse(data.path("gateway_response").asText("success"));
         order.setPaidAt(LocalDateTime.now());
         orderRepository.save(order);
+        notificationService.notifyPaymentReceived(order);
     }
 
     private JsonNode postJson(String path, Map<String, Object> payload) {

@@ -9,6 +9,7 @@ import com.baleshop.baleshop.model.User;
 import com.baleshop.baleshop.repository.BaleRepository;
 import com.baleshop.baleshop.repository.OrderRepository;
 import com.baleshop.baleshop.repository.UserRepository;
+import com.baleshop.baleshop.service.NotificationService;
 import com.baleshop.baleshop.service.SessionAuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +42,8 @@ public class OrderController {
     private UserRepository userRepository;
     @Autowired
     private SessionAuthService sessionAuthService;
+    @Autowired
+    private NotificationService notificationService;
 
     @PostMapping("/checkout")
     public Order checkout(@RequestBody CheckoutRequest request, HttpServletRequest httpRequest) {
@@ -111,7 +114,10 @@ public class OrderController {
         order.setSellerId(sellerId);
         order.setSellerName(sellerName);
 
-        return orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
+        notificationService.notifyOrderCreated(savedOrder);
+
+        return savedOrder;
     }
 
     @GetMapping("/{id}")
@@ -166,11 +172,16 @@ public class OrderController {
         boolean isPrivileged = "ADMIN".equalsIgnoreCase(actor.getRole()) || "SUPER_ADMIN".equalsIgnoreCase(actor.getRole());
         boolean isSellerOwner = "SELLER".equalsIgnoreCase(actor.getRole()) && actor.getId().equals(order.getSellerId());
 
+        boolean deliveryStatusChanged = false;
+        boolean paymentStatusChanged = false;
+        boolean payoutChanged = false;
+
         if (updates.containsKey("deliveryStatus")) {
             if (!isSellerOwner && !isPrivileged) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have permission to update this order");
             }
             order.setDeliveryStatus(updates.get("deliveryStatus"));
+            deliveryStatusChanged = true;
         }
 
         if (updates.containsKey("paymentStatus")) {
@@ -178,6 +189,7 @@ public class OrderController {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have permission to update payment status");
             }
             order.setPaymentStatus(updates.get("paymentStatus"));
+            paymentStatusChanged = true;
         }
 
         if (updates.containsKey("holdPayout") && "true".equalsIgnoreCase(updates.get("holdPayout"))) {
@@ -191,6 +203,7 @@ public class OrderController {
             order.setPaymentStatus("payout_on_hold");
             order.setPayoutHeldAt(LocalDateTime.now());
             order.setPayoutHoldReason(updates.getOrDefault("payoutHoldReason", "Held by super admin"));
+            payoutChanged = true;
         }
 
         if (updates.containsKey("resumePayout") && "true".equalsIgnoreCase(updates.get("resumePayout"))) {
@@ -204,6 +217,7 @@ public class OrderController {
             order.setPaymentStatus("ready_for_payout");
             order.setPayoutHeldAt(null);
             order.setPayoutHoldReason(null);
+            payoutChanged = true;
         }
 
         if (updates.containsKey("releasePayout") && "true".equals(updates.get("releasePayout"))) {
@@ -225,9 +239,20 @@ public class OrderController {
             order.setPayoutReleasedAt(LocalDateTime.now());
             order.setPayoutHeldAt(null);
             order.setPayoutHoldReason(null);
+            payoutChanged = true;
         }
 
         orderRepository.save(order);
+
+        if (deliveryStatusChanged) {
+            notificationService.notifyOrderStatusChanged(order, "Delivery status", order.getDeliveryStatus());
+        }
+        if (paymentStatusChanged) {
+            notificationService.notifyOrderStatusChanged(order, "Payment status", order.getPaymentStatus());
+        }
+        if (payoutChanged) {
+            notificationService.notifyOrderStatusChanged(order, "Payout status", order.getPaymentStatus());
+        }
 
         return ResponseEntity.ok(order);
     }
@@ -254,6 +279,7 @@ public class OrderController {
         order.setPaymentStatus("ready_for_payout");
 
         orderRepository.save(order);
+        notificationService.notifyOrderStatusChanged(order, "Buyer confirmation", "received");
 
         return ResponseEntity.ok(order);
     }

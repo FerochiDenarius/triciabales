@@ -26,8 +26,19 @@ public class Order {
     private Double total;
 
     private String status; // pending, paid, shipped
+    private String deliveryProvider;
     private String deliveryMethod;
     private String deliveryStatus;
+    private String externalDeliveryId;
+    private String trackingUrl;
+    private Double deliveryFee;
+    private String pickupAddress;
+    private String dropoffAddress;
+    private String recipientName;
+    private String recipientPhone;
+    private String uberQuoteId;
+    @Column(length = 2000)
+    private String deliveryGatewayResponse;
     private String paymentMethod;
     private String paymentStatus;
     private String momoNetwork;
@@ -156,6 +167,14 @@ public class Order {
         this.status = status;
     }
 
+    public String getDeliveryProvider() {
+        return deliveryProvider;
+    }
+
+    public void setDeliveryProvider(String deliveryProvider) {
+        this.deliveryProvider = deliveryProvider;
+    }
+
     public String getDeliveryMethod() {
         return deliveryMethod;
     }
@@ -170,6 +189,78 @@ public class Order {
 
     public void setDeliveryStatus(String deliveryStatus) {
         this.deliveryStatus = deliveryStatus;
+    }
+
+    public String getExternalDeliveryId() {
+        return externalDeliveryId;
+    }
+
+    public void setExternalDeliveryId(String externalDeliveryId) {
+        this.externalDeliveryId = externalDeliveryId;
+    }
+
+    public String getTrackingUrl() {
+        return trackingUrl;
+    }
+
+    public void setTrackingUrl(String trackingUrl) {
+        this.trackingUrl = trackingUrl;
+    }
+
+    public Double getDeliveryFee() {
+        return deliveryFee;
+    }
+
+    public void setDeliveryFee(Double deliveryFee) {
+        this.deliveryFee = deliveryFee;
+    }
+
+    public String getPickupAddress() {
+        return pickupAddress;
+    }
+
+    public void setPickupAddress(String pickupAddress) {
+        this.pickupAddress = pickupAddress;
+    }
+
+    public String getDropoffAddress() {
+        return dropoffAddress;
+    }
+
+    public void setDropoffAddress(String dropoffAddress) {
+        this.dropoffAddress = dropoffAddress;
+    }
+
+    public String getRecipientName() {
+        return recipientName;
+    }
+
+    public void setRecipientName(String recipientName) {
+        this.recipientName = recipientName;
+    }
+
+    public String getRecipientPhone() {
+        return recipientPhone;
+    }
+
+    public void setRecipientPhone(String recipientPhone) {
+        this.recipientPhone = recipientPhone;
+    }
+
+    public String getUberQuoteId() {
+        return uberQuoteId;
+    }
+
+    public void setUberQuoteId(String uberQuoteId) {
+        this.uberQuoteId = uberQuoteId;
+    }
+
+    public String getDeliveryGatewayResponse() {
+        return deliveryGatewayResponse;
+    }
+
+    public void setDeliveryGatewayResponse(String deliveryGatewayResponse) {
+        this.deliveryGatewayResponse = deliveryGatewayResponse;
     }
 
     public String getPaymentMethod() {
