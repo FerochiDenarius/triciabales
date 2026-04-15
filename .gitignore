@@ -33,3 +33,4 @@ ecosystem.config.js
 
 ### VS Code ###
 .vscode/
+.aider*

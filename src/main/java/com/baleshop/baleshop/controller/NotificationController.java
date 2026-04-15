@@ -44,15 +44,37 @@ public class NotificationController {
         AppNotification notification = notificationRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Notification not found"));
 
-        boolean ownsNotification = actor.getId().equals(notification.getUserId());
-        boolean roleMatches = notification.getRecipientRole() != null
-                && notification.getRecipientRole().equalsIgnoreCase(actor.getRole());
-
-        if (!ownsNotification && !roleMatches) {
+        if (!canAccessNotification(actor, notification)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You cannot update this notification");
         }
 
         notification.setReadAt(LocalDateTime.now());
         return notificationRepository.save(notification);
+    }
+
+    @DeleteMapping("/{id}")
+    public java.util.Map<String, Object> deleteNotification(@PathVariable Long id, HttpServletRequest request) {
+        User actor = sessionAuthService.requireAuthenticatedUser(request);
+        AppNotification notification = notificationRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Notification not found"));
+
+        if (!canAccessNotification(actor, notification)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You cannot delete this notification");
+        }
+
+        notificationRepository.delete(notification);
+        return java.util.Map.of(
+                "success", true,
+                "message", "Notification deleted",
+                "id", id
+        );
+    }
+
+    private boolean canAccessNotification(User actor, AppNotification notification) {
+        boolean ownsNotification = actor.getId().equals(notification.getUserId());
+        boolean roleMatches = notification.getRecipientRole() != null
+                && notification.getRecipientRole().equalsIgnoreCase(actor.getRole());
+
+        return ownsNotification || roleMatches;
     }
 }

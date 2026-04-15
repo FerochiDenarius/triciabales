@@ -64,13 +64,29 @@ public class UserController {
     @Autowired
     private NotificationService notificationService;
 
-    @PostMapping("/register")
-    public ResponseEntity<AuthResponse> register(@RequestBody AuthRequest request) {
 
-        String requestedEmail = request.getEmail() == null ? "" : request.getEmail().trim();
+    @PostMapping(value = "/register", consumes = {"multipart/form-data"})
+    public ResponseEntity<AuthResponse> register(
+            @RequestParam("name") String name,
+            @RequestParam("email") String email,
+            @RequestParam("password") String password,
+            @RequestParam("phone") String phone,
+            @RequestParam("address") String address,
+            @RequestParam(value = "role", required = false) String role,
+            @RequestParam(value = "referralCode", required = false) String referralCode,
+            @RequestParam(value = "dateOfBirth", required = false) String dateOfBirth,
+            @RequestParam(value = "idType", required = false) String idType,
+            @RequestParam(value = "idNumber", required = false) String idNumber,
+            @RequestParam(value = "shopName", required = false) String shopName,
+            @RequestParam(value = "shopAddress", required = false) String shopAddress,
+            @RequestParam(value = "proofOfOperation", required = false) String proofOfOperation,
+            @RequestParam(value = "idImage", required = false) MultipartFile idImage
+    ) throws IOException {
+
+        String requestedEmail = email == null ? "" : email.trim();
         log.info("Registration requested for {}", requestedEmail);
 
-        Optional<User> existingUser = userRepository.findByEmailIgnoreCase(request.getEmail());
+        Optional<User> existingUser = userRepository.findByEmailIgnoreCase(requestedEmail);
         User user = existingUser.orElseGet(User::new);
         boolean reactivatingDeletedAccount = existingUser
                 .map(existing -> "DELETED".equals(normalizeValue(existing.getAccountStatus(), "ACTIVE")))
@@ -83,8 +99,8 @@ public class UserController {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
         }
 
-        String requestedRole = request.getRole() != null && !request.getRole().isBlank()
-                ? request.getRole().trim().toUpperCase(Locale.ROOT)
+        String requestedRole = role != null && !role.isBlank()
+                ? role.trim().toUpperCase(Locale.ROOT)
                 : "BUYER";
 
         if (!"BUYER".equals(requestedRole) && !"SELLER".equals(requestedRole)) {
@@ -93,19 +109,21 @@ public class UserController {
 
         User referrer = null;
 
-        if (request.getReferralCode() != null && !request.getReferralCode().isBlank()) {
-            referrer = userRepository.findByReferralCode(request.getReferralCode().trim().toUpperCase(Locale.ROOT))
+        if (referralCode != null && !referralCode.isBlank()) {
+            referrer = userRepository.findByReferralCode(referralCode.trim().toUpperCase(Locale.ROOT))
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid referral code"));
         }
 
-        user.setName(request.getName());
-        user.setEmail(request.getEmail());
-        user.setPassword(passwordService.encode(request.getPassword()));
-        user.setPhone(request.getPhone());
-        user.setAddress(request.getAddress());
+        user.setName(name);
+        user.setEmail(requestedEmail);
+        user.setPassword(passwordService.encode(password));
+        user.setPhone(phone);
+        user.setAddress(address);
+
         if (user.getReferralCode() == null || user.getReferralCode().isBlank()) {
             user.setReferralCode(generateReferralCode());
         }
+
         user.setRole(requestedRole);
         user.setEmailVerified(false);
         user.setVerificationSentAt(LocalDateTime.now());
@@ -114,6 +132,19 @@ public class UserController {
         user.setSuspendedAt(null);
         user.setBlockedAt(null);
         user.setPasswordResetRequestedAt(null);
+
+        if ("SELLER".equalsIgnoreCase(requestedRole)) {
+            user.setDateOfBirth(dateOfBirth);
+            user.setIdType(idType);
+            user.setIdNumber(idNumber);
+            user.setShopName(shopName);
+            user.setShopAddress(shopAddress);
+            user.setProofOfOperation(proofOfOperation);
+
+            if (idImage != null && !idImage.isEmpty()) {
+                user.setIdImageUrl(cloudinaryService.uploadProfileImage(idImage));
+            }
+        }
 
         if (referrer != null) {
             user.setReferredByCode(referrer.getReferralCode());
@@ -129,6 +160,7 @@ public class UserController {
         }
 
         User savedUser = userRepository.save(user);
+
         if (reactivatingDeletedAccount) {
             log.info("Reactivated deleted account during registration for {}", savedUser.getEmail());
         } else {
@@ -153,7 +185,6 @@ public class UserController {
                 )
         );
     }
-
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@RequestBody AuthRequest request) {
 

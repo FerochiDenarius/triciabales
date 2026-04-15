@@ -9,6 +9,12 @@ public class AuthRequest {
     private String address;
     private String role;
     private String referralCode;
+    private String dateOfBirth;
+    private String idType;
+    private String idNumber;
+    private String shopName;
+    private String shopAddress;
+    private String proofOfOperation;
 
     public AuthRequest() {
     }

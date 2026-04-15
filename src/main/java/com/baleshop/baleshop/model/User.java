@@ -41,6 +41,14 @@ public class User {
     private LocalDateTime suspendedAt;
     private LocalDateTime blockedAt;
     private LocalDateTime deletedAt;
+    private String dateOfBirth;
+    private String idType;
+    private String idNumber;
+    private String idImageUrl;
+    private String shopName;
+    private String shopAddress;
+    @Column(length = 2000)
+    private String proofOfOperation;
 
     public User() {}
 
@@ -258,5 +266,61 @@ public class User {
 
     public void setDeletedAt(LocalDateTime deletedAt) {
         this.deletedAt = deletedAt;
+    }
+
+    public String getDateOfBirth() {
+        return dateOfBirth;
+    }
+
+    public void setDateOfBirth(String dateOfBirth) {
+        this.dateOfBirth = dateOfBirth;
+    }
+
+    public String getIdType() {
+        return idType;
+    }
+
+    public void setIdType(String idType) {
+        this.idType = idType;
+    }
+
+    public String getIdNumber() {
+        return idNumber;
+    }
+
+    public void setIdNumber(String idNumber) {
+        this.idNumber = idNumber;
+    }
+
+    public String getIdImageUrl() {
+        return idImageUrl;
+    }
+
+    public void setIdImageUrl(String idImageUrl) {
+        this.idImageUrl = idImageUrl;
+    }
+
+    public String getShopName() {
+        return shopName;
+    }
+
+    public void setShopName(String shopName) {
+        this.shopName = shopName;
+    }
+
+    public String getShopAddress() {
+        return shopAddress;
+    }
+
+    public void setShopAddress(String shopAddress) {
+        this.shopAddress = shopAddress;
+    }
+
+    public String getProofOfOperation() {
+        return proofOfOperation;
+    }
+
+    public void setProofOfOperation(String proofOfOperation) {
+        this.proofOfOperation = proofOfOperation;
     }
 }
