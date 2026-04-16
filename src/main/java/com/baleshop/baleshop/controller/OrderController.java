@@ -2,6 +2,7 @@ package com.baleshop.baleshop.controller;
 
 import com.baleshop.baleshop.dto.CartItemDto;
 import com.baleshop.baleshop.dto.CheckoutRequest;
+import com.baleshop.baleshop.dto.RefundRequest;
 import com.baleshop.baleshop.model.Order;
 import com.baleshop.baleshop.model.OrderItem;
 import com.baleshop.baleshop.model.Bale;
@@ -10,6 +11,7 @@ import com.baleshop.baleshop.repository.BaleRepository;
 import com.baleshop.baleshop.repository.OrderRepository;
 import com.baleshop.baleshop.repository.UserRepository;
 import com.baleshop.baleshop.service.NotificationService;
+import com.baleshop.baleshop.service.RefundService;
 import com.baleshop.baleshop.service.SessionAuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,6 +46,8 @@ public class OrderController {
     private SessionAuthService sessionAuthService;
     @Autowired
     private NotificationService notificationService;
+    @Autowired
+    private RefundService refundService;
 
     @PostMapping("/checkout")
     public Order checkout(@RequestBody CheckoutRequest request, HttpServletRequest httpRequest) {
@@ -287,6 +291,16 @@ public class OrderController {
         notificationService.notifyOrderStatusChanged(order, "Buyer confirmation", "received");
 
         return ResponseEntity.ok(order);
+    }
+
+    @PostMapping("/{id}/refund")
+    public ResponseEntity<Map<String, Object>> requestRefund(
+            @PathVariable Long id,
+            @RequestBody RefundRequest refundRequest,
+            HttpServletRequest request
+    ) {
+        User actor = sessionAuthService.requireRole(request, "SUPER_ADMIN");
+        return ResponseEntity.status(HttpStatus.CREATED).body(refundService.requestRefund(id, refundRequest, actor));
     }
 
     @DeleteMapping("/{id}")

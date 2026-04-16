@@ -58,6 +58,14 @@ public class Order {
     private LocalDateTime payoutReleasedAt;
     private LocalDateTime payoutHeldAt;
     private String payoutHoldReason;
+    private Boolean refundRequested = false;
+    private Double refundAmount;
+    private String refundStatus;
+    @Column(length = 1000)
+    private String refundReason;
+    private LocalDateTime refundRequestedAt;
+    private LocalDateTime refundReviewedAt;
+    private LocalDateTime refundProcessedAt;
 
     @ManyToOne
     @JoinColumn(name = "user_id")
@@ -421,6 +429,62 @@ public class Order {
 
     public void setPayoutHoldReason(String payoutHoldReason) {
         this.payoutHoldReason = payoutHoldReason;
+    }
+
+    public Boolean getRefundRequested() {
+        return refundRequested;
+    }
+
+    public void setRefundRequested(Boolean refundRequested) {
+        this.refundRequested = refundRequested;
+    }
+
+    public Double getRefundAmount() {
+        return refundAmount;
+    }
+
+    public void setRefundAmount(Double refundAmount) {
+        this.refundAmount = refundAmount;
+    }
+
+    public String getRefundStatus() {
+        return refundStatus;
+    }
+
+    public void setRefundStatus(String refundStatus) {
+        this.refundStatus = refundStatus;
+    }
+
+    public String getRefundReason() {
+        return refundReason;
+    }
+
+    public void setRefundReason(String refundReason) {
+        this.refundReason = refundReason;
+    }
+
+    public LocalDateTime getRefundRequestedAt() {
+        return refundRequestedAt;
+    }
+
+    public void setRefundRequestedAt(LocalDateTime refundRequestedAt) {
+        this.refundRequestedAt = refundRequestedAt;
+    }
+
+    public LocalDateTime getRefundReviewedAt() {
+        return refundReviewedAt;
+    }
+
+    public void setRefundReviewedAt(LocalDateTime refundReviewedAt) {
+        this.refundReviewedAt = refundReviewedAt;
+    }
+
+    public LocalDateTime getRefundProcessedAt() {
+        return refundProcessedAt;
+    }
+
+    public void setRefundProcessedAt(LocalDateTime refundProcessedAt) {
+        this.refundProcessedAt = refundProcessedAt;
     }
 
     public User getUser() {

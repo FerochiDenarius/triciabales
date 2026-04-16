@@ -200,6 +200,41 @@ public class PaystackService {
         }
     }
 
+    public Map<String, Object> createRefund(Order order, Double amount, String reason, String actorEmail) {
+        requireConfigured();
+
+        if (order.getPaystackReference() == null || order.getPaystackReference().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order does not have a Paystack transaction reference");
+        }
+
+        if (amount == null || amount <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Refund amount must be greater than zero");
+        }
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("transaction", order.getPaystackReference());
+        payload.put("amount", amountToPesewas(amount));
+        payload.put("currency", "GHS");
+        payload.put("customer_note", reason == null || reason.isBlank() ? "Refund for order #" + order.getId() : reason);
+        payload.put("merchant_note", "Refund for order #" + order.getId() + " by " + (actorEmail == null ? "Yenkasa Store" : actorEmail));
+
+        JsonNode response = postJson("/refund", payload);
+        JsonNode data = response.path("data");
+
+        if (!response.path("status").asBoolean(false) || data.isMissingNode()) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, response.path("message").asText("Could not create Paystack refund"));
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("id", data.path("id").asText(null));
+        result.put("status", data.path("status").asText(null));
+        result.put("amount", data.path("amount").asLong(0));
+        result.put("currency", data.path("currency").asText(null));
+        result.put("message", response.path("message").asText("Refund queued"));
+        result.put("raw", data.toString());
+        return result;
+    }
+
     private void markOrderPaid(Order order, JsonNode data) {
         if ("paid".equalsIgnoreCase(order.getPaymentStatus())) {
             return;
