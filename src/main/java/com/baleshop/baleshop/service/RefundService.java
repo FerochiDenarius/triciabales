@@ -116,6 +116,7 @@ public class RefundService {
             markReviewed(refund, actor, STATUS_REJECTED);
             order.setRefundStatus(STATUS_REJECTED);
             order.setRefundReviewedAt(refund.getReviewedAt());
+            releaseRefundHoldIfEligible(order);
         } else if (STATUS_PROCESSED.equals(nextStatus)) {
             if (!STATUS_APPROVED.equalsIgnoreCase(refund.getStatus())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Refund must be approved before processing");
@@ -182,6 +183,10 @@ public class RefundService {
         order.setRefundStatus(refund.getStatus());
         order.setRefundReviewedAt(refund.getReviewedAt());
         order.setRefundProcessedAt(refund.getProcessedAt());
+
+        if (STATUS_PROCESSED.equalsIgnoreCase(refund.getStatus())) {
+            applyRefundedPaymentStatus(order, refund.getAmount());
+        }
     }
 
     private void validateRefundableOrder(Order order, double amount, String reason) {
@@ -217,6 +222,36 @@ public class RefundService {
                 || "payout_released".equalsIgnoreCase(paymentStatus)
                 || "paid".equalsIgnoreCase(status)
                 || order.getPaidAt() != null;
+    }
+
+    private boolean isPayoutReleaseEligible(Order order) {
+        return Boolean.TRUE.equals(order.getConfirmedByBuyer())
+                || "delivered".equalsIgnoreCase(order.getDeliveryStatus());
+    }
+
+    private void releaseRefundHoldIfEligible(Order order) {
+        if (Boolean.TRUE.equals(order.getPayoutReleased())) {
+            return;
+        }
+
+        if (!"payout_on_hold".equalsIgnoreCase(order.getPaymentStatus())) {
+            return;
+        }
+
+        if (isPayoutReleaseEligible(order)) {
+            order.setPaymentStatus("ready_for_payout");
+            order.setPayoutHeldAt(null);
+            order.setPayoutHoldReason(null);
+        }
+    }
+
+    private void applyRefundedPaymentStatus(Order order, Double refundAmount) {
+        double total = order.getTotal() == null ? 0.0 : order.getTotal();
+        double amount = refundAmount == null ? 0.0 : refundAmount;
+
+        order.setPaymentStatus(amount >= total ? "refunded" : "partially_refunded");
+        order.setPayoutHeldAt(null);
+        order.setPayoutHoldReason(null);
     }
 
     private Map<String, Object> serialize(OrderRefund refund) {

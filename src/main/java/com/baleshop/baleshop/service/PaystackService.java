@@ -301,10 +301,22 @@ public class PaystackService {
         if (order != null) {
             order.setRefundStatus(refund.getStatus());
             order.setRefundProcessedAt(refund.getProcessedAt());
+            if ("PROCESSED".equalsIgnoreCase(refund.getStatus())) {
+                applyRefundedPaymentStatus(order, refund.getAmount());
+            }
             orderRepository.save(order);
         }
 
         refundRepository.save(refund);
+    }
+
+    private void applyRefundedPaymentStatus(Order order, Double refundAmount) {
+        double total = order.getTotal() == null ? 0.0 : order.getTotal();
+        double amount = refundAmount == null ? 0.0 : refundAmount;
+
+        order.setPaymentStatus(amount >= total ? "refunded" : "partially_refunded");
+        order.setPayoutHeldAt(null);
+        order.setPayoutHoldReason(null);
     }
 
     private JsonNode postJson(String path, Map<String, Object> payload) {
