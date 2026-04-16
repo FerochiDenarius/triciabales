@@ -1,6 +1,8 @@
 package com.baleshop.baleshop.service;
 
 import com.baleshop.baleshop.model.Order;
+import com.baleshop.baleshop.model.OrderRefund;
+import com.baleshop.baleshop.repository.OrderRefundRepository;
 import com.baleshop.baleshop.repository.OrderRepository;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,6 +38,7 @@ public class PaystackService {
     private static final String PAYSTACK_BASE_URL = "https://api.paystack.co";
 
     private final OrderRepository orderRepository;
+    private final OrderRefundRepository refundRepository;
     private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
@@ -48,10 +51,12 @@ public class PaystackService {
 
     public PaystackService(
             OrderRepository orderRepository,
+            OrderRefundRepository refundRepository,
             NotificationService notificationService,
             ObjectMapper objectMapper
     ) {
         this.orderRepository = orderRepository;
+        this.refundRepository = refundRepository;
         this.notificationService = notificationService;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder()
@@ -198,6 +203,10 @@ public class PaystackService {
         if ("charge.success".equalsIgnoreCase(event) && !reference.isBlank()) {
             verifyPayment(reference);
         }
+
+        if (event != null && event.toLowerCase(Locale.ROOT).startsWith("refund.")) {
+            updateRefundFromWebhook(root.path("data"));
+        }
     }
 
     public Map<String, Object> createRefund(Order order, Double amount, String reason, String actorEmail) {
@@ -247,6 +256,55 @@ public class PaystackService {
         order.setPaidAt(LocalDateTime.now());
         orderRepository.save(order);
         notificationService.notifyPaymentReceived(order);
+    }
+
+    private void updateRefundFromWebhook(JsonNode data) {
+        String transactionReference = data.path("transaction_reference").asText("");
+        if (transactionReference.isBlank()) {
+            transactionReference = data.path("transaction").path("reference").asText("");
+        }
+        if (transactionReference.isBlank()) {
+            return;
+        }
+
+        OrderRefund refund = refundRepository
+                .findFirstByOrderPaystackReferenceOrderByCreatedAtDesc(transactionReference)
+                .orElse(null);
+        if (refund == null) {
+            return;
+        }
+
+        String paystackStatus = data.path("status").asText("");
+        refund.setPaystackRefundStatus(paystackStatus);
+        refund.setPaystackGatewayResponse(data.toString());
+
+        String refundId = data.path("id").asText("");
+        if (refundId.isBlank()) {
+            refundId = data.path("refund_reference").asText("");
+        }
+        if (!refundId.isBlank()) {
+            refund.setPaystackRefundId(refundId);
+        }
+
+        if ("processed".equalsIgnoreCase(paystackStatus)) {
+            refund.setStatus("PROCESSED");
+            refund.setProcessedAt(LocalDateTime.now());
+        } else if ("failed".equalsIgnoreCase(paystackStatus)) {
+            refund.setStatus("FAILED");
+        } else if ("needs-attention".equalsIgnoreCase(paystackStatus)) {
+            refund.setStatus("NEEDS_ATTENTION");
+        } else if (!paystackStatus.isBlank()) {
+            refund.setStatus("PROCESSING");
+        }
+
+        Order order = refund.getOrder();
+        if (order != null) {
+            order.setRefundStatus(refund.getStatus());
+            order.setRefundProcessedAt(refund.getProcessedAt());
+            orderRepository.save(order);
+        }
+
+        refundRepository.save(refund);
     }
 
     private JsonNode postJson(String path, Map<String, Object> payload) {
