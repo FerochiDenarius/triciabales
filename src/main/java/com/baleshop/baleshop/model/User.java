@@ -31,9 +31,14 @@ public class User {
     private String momoNetwork;
     private String momoNumber;
     private String bankName;
+    private String bankCode;
     private String bankAccountNumber;
     private String bankAccountName;
     private String paystackRecipientCode;
+    private String paystackSubaccountCode;
+    private String paystackSubaccountId;
+    private Boolean paystackSubaccountVerified = false;
+    private String paystackSubaccountStatus;
     private Boolean emailVerified = false;
     private LocalDateTime verificationSentAt;
     private LocalDateTime passwordResetRequestedAt;
@@ -188,6 +193,14 @@ public class User {
         this.bankName = bankName;
     }
 
+    public String getBankCode() {
+        return bankCode;
+    }
+
+    public void setBankCode(String bankCode) {
+        this.bankCode = bankCode;
+    }
+
     public String getBankAccountNumber() {
         return bankAccountNumber;
     }
@@ -210,6 +223,38 @@ public class User {
 
     public void setPaystackRecipientCode(String paystackRecipientCode) {
         this.paystackRecipientCode = paystackRecipientCode;
+    }
+
+    public String getPaystackSubaccountCode() {
+        return paystackSubaccountCode;
+    }
+
+    public void setPaystackSubaccountCode(String paystackSubaccountCode) {
+        this.paystackSubaccountCode = paystackSubaccountCode;
+    }
+
+    public String getPaystackSubaccountId() {
+        return paystackSubaccountId;
+    }
+
+    public void setPaystackSubaccountId(String paystackSubaccountId) {
+        this.paystackSubaccountId = paystackSubaccountId;
+    }
+
+    public Boolean getPaystackSubaccountVerified() {
+        return paystackSubaccountVerified;
+    }
+
+    public void setPaystackSubaccountVerified(Boolean paystackSubaccountVerified) {
+        this.paystackSubaccountVerified = paystackSubaccountVerified;
+    }
+
+    public String getPaystackSubaccountStatus() {
+        return paystackSubaccountStatus;
+    }
+
+    public void setPaystackSubaccountStatus(String paystackSubaccountStatus) {
+        this.paystackSubaccountStatus = paystackSubaccountStatus;
     }
 
     public Boolean getEmailVerified() {

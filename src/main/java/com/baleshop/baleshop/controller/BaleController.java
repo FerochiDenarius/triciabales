@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -42,7 +43,9 @@ public class BaleController {
     // ✅ GET all bales
     @GetMapping
     public List<Bale> getAllBales() {
-        return enrichSellerDetails(service.getAllBales());
+        return enrichSellerDetails(service.getAllBales().stream()
+                .filter(this::isVisibleSellerProduct)
+                .toList());
     }
 
     @GetMapping("/seller/{sellerId}")
@@ -293,6 +296,27 @@ public class BaleController {
     private List<Bale> enrichSellerDetails(List<Bale> bales) {
         bales.forEach(this::enrichSellerDetails);
         return bales;
+    }
+
+    private boolean isVisibleSellerProduct(Bale bale) {
+        if (bale == null || bale.getSellerId() == null) {
+            return true;
+        }
+
+        return userRepository.findById(bale.getSellerId())
+                .map(this::isVisibleSeller)
+                .orElse(false);
+    }
+
+    private boolean isVisibleSeller(User seller) {
+        String status = seller.getAccountStatus() == null
+                ? "ACTIVE"
+                : seller.getAccountStatus().trim().toUpperCase(Locale.ROOT);
+
+        return "ACTIVE".equals(status)
+                && seller.getBlockedAt() == null
+                && seller.getSuspendedAt() == null
+                && seller.getDeletedAt() == null;
     }
 
     private Bale enrichSellerDetails(Bale bale) {

@@ -7,8 +7,10 @@ public class PayoutDetailsRequest {
     private String momoNetwork;
     private String momoNumber;
     private String bankName;
+    private String bankCode;
     private String bankAccountNumber;
     private String bankAccountName;
+    private String paystackSubaccountCode;
 
     public PayoutDetailsRequest() {
     }
@@ -53,6 +55,14 @@ public class PayoutDetailsRequest {
         this.bankName = bankName;
     }
 
+    public String getBankCode() {
+        return bankCode;
+    }
+
+    public void setBankCode(String bankCode) {
+        this.bankCode = bankCode;
+    }
+
     public String getBankAccountNumber() {
         return bankAccountNumber;
     }
@@ -67,5 +77,13 @@ public class PayoutDetailsRequest {
 
     public void setBankAccountName(String bankAccountName) {
         this.bankAccountName = bankAccountName;
+    }
+
+    public String getPaystackSubaccountCode() {
+        return paystackSubaccountCode;
+    }
+
+    public void setPaystackSubaccountCode(String paystackSubaccountCode) {
+        this.paystackSubaccountCode = paystackSubaccountCode;
     }
 }

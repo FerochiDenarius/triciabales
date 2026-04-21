@@ -63,6 +63,18 @@ public class PaystackController {
         return ResponseEntity.ok(paystackService.verifyPayment(reference));
     }
 
+    @GetMapping("/status")
+    public ResponseEntity<Map<String, Object>> status(HttpServletRequest request) {
+        sessionAuthService.requireRole(request, "SUPER_ADMIN");
+        return ResponseEntity.ok(paystackService.status());
+    }
+
+    @GetMapping("/banks")
+    public ResponseEntity<Map<String, Object>> banks(HttpServletRequest request) {
+        sessionAuthService.requireRole(request, "SELLER", "ADMIN", "SUPER_ADMIN");
+        return ResponseEntity.ok(paystackService.listGhanaBanks());
+    }
+
     @PostMapping("/webhook")
     public ResponseEntity<Map<String, Object>> webhook(
             @RequestBody String payload,

@@ -15,6 +15,12 @@ public class OrderItem {
     private String baleName;
     private Double price;
     private Integer quantity;
+    private Long sellerId;
+    private String sellerName;
+    private Double lineTotal;
+    private Double commissionAmount;
+    private Double sellerPayoutAmount;
+    private String paystackSubaccountCode;
 
     @JsonBackReference
     @ManyToOne
@@ -60,6 +66,54 @@ public class OrderItem {
 
     public void setQuantity(Integer quantity) {
         this.quantity = quantity;
+    }
+
+    public Long getSellerId() {
+        return sellerId;
+    }
+
+    public void setSellerId(Long sellerId) {
+        this.sellerId = sellerId;
+    }
+
+    public String getSellerName() {
+        return sellerName;
+    }
+
+    public void setSellerName(String sellerName) {
+        this.sellerName = sellerName;
+    }
+
+    public Double getLineTotal() {
+        return lineTotal;
+    }
+
+    public void setLineTotal(Double lineTotal) {
+        this.lineTotal = lineTotal;
+    }
+
+    public Double getCommissionAmount() {
+        return commissionAmount;
+    }
+
+    public void setCommissionAmount(Double commissionAmount) {
+        this.commissionAmount = commissionAmount;
+    }
+
+    public Double getSellerPayoutAmount() {
+        return sellerPayoutAmount;
+    }
+
+    public void setSellerPayoutAmount(Double sellerPayoutAmount) {
+        this.sellerPayoutAmount = sellerPayoutAmount;
+    }
+
+    public String getPaystackSubaccountCode() {
+        return paystackSubaccountCode;
+    }
+
+    public void setPaystackSubaccountCode(String paystackSubaccountCode) {
+        this.paystackSubaccountCode = paystackSubaccountCode;
     }
 
     public Order getOrder() {

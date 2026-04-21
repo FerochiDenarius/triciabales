@@ -3,6 +3,7 @@ package com.baleshop.baleshop.controller;
 import com.baleshop.baleshop.dto.PayoutDetailsRequest;
 import com.baleshop.baleshop.model.User;
 import com.baleshop.baleshop.repository.UserRepository;
+import com.baleshop.baleshop.service.PaystackService;
 import com.baleshop.baleshop.service.SessionAuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +21,8 @@ public class SellerController {
     private UserRepository userRepository;
     @Autowired
     private SessionAuthService sessionAuthService;
+    @Autowired
+    private PaystackService paystackService;
 
     @PutMapping("/payout-details")
     public ResponseEntity<User> updatePayoutDetails(@RequestBody PayoutDetailsRequest request, HttpServletRequest httpRequest) {
@@ -44,9 +47,28 @@ public class SellerController {
         user.setMomoNetwork(request.getMomoNetwork());
         user.setMomoNumber(request.getMomoNumber());
         user.setBankName(request.getBankName());
+        user.setBankCode(request.getBankCode());
         user.setBankAccountNumber(request.getBankAccountNumber());
         user.setBankAccountName(request.getBankAccountName());
+        if (!"SELLER".equalsIgnoreCase(actor.getRole())
+                && request.getPaystackSubaccountCode() != null
+                && !request.getPaystackSubaccountCode().isBlank()) {
+            user.setPaystackSubaccountCode(request.getPaystackSubaccountCode().trim());
+            user.setPaystackSubaccountStatus("linked_manually");
+        }
 
-        return ResponseEntity.ok(userRepository.save(user));
+        User saved = userRepository.save(user);
+        if (canCreatePaystackSubaccount(saved)) {
+            saved = paystackService.createOrUpdateSellerSubaccount(saved);
+        }
+
+        return ResponseEntity.ok(saved);
+    }
+
+    private boolean canCreatePaystackSubaccount(User user) {
+        return user.getBankCode() != null && !user.getBankCode().isBlank()
+                && user.getBankAccountNumber() != null && !user.getBankAccountNumber().isBlank()
+                && (user.getShopName() != null && !user.getShopName().isBlank()
+                    || user.getName() != null && !user.getName().isBlank());
     }
 }

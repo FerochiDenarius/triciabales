@@ -90,7 +90,7 @@ public class UberDeliveryController {
     private void requireOrderAccess(User actor, Order order) {
         if (isPrivileged(actor)
                 || actor.getId().equals(order.getBuyerId())
-                || actor.getId().equals(order.getSellerId())) {
+                || orderContainsSeller(order, actor.getId())) {
             return;
         }
 
@@ -99,7 +99,7 @@ public class UberDeliveryController {
 
     private void requireDispatchAccess(User actor, Order order) {
         if (isPrivileged(actor)
-                || ("SELLER".equalsIgnoreCase(actor.getRole()) && actor.getId().equals(order.getSellerId()))) {
+                || ("SELLER".equalsIgnoreCase(actor.getRole()) && orderContainsSeller(order, actor.getId()))) {
             return;
         }
 
@@ -108,5 +108,16 @@ public class UberDeliveryController {
 
     private boolean isPrivileged(User actor) {
         return "ADMIN".equalsIgnoreCase(actor.getRole()) || "SUPER_ADMIN".equalsIgnoreCase(actor.getRole());
+    }
+
+    private boolean orderContainsSeller(Order order, Long sellerId) {
+        if (sellerId == null || order == null) {
+            return false;
+        }
+        if (sellerId.equals(order.getSellerId())) {
+            return true;
+        }
+        return order.getItems() != null
+                && order.getItems().stream().anyMatch(item -> sellerId.equals(item.getSellerId()));
     }
 }

@@ -10,7 +10,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Locale;
+import java.util.Set;
 
 @Service
 public class NotificationService {
@@ -75,9 +77,9 @@ public class NotificationService {
                 metadataJson
         );
 
-        if (order.getSellerId() != null) {
+        for (Long sellerId : sellerIds(order)) {
             notifyUser(
-                    order.getSellerId(),
+                    sellerId,
                     "SELLER_ORDER_CREATED",
                     "New order " + orderId,
                     "A buyer placed order " + orderId + " for " + total + ". Prepare the products for delivery.",
@@ -114,9 +116,9 @@ public class NotificationService {
                 metadataJson
         );
 
-        if (order.getSellerId() != null) {
+        for (Long sellerId : sellerIds(order)) {
             notifyUser(
-                    order.getSellerId(),
+                    sellerId,
                     "SELLER_PAYMENT_CONFIRMED",
                     "Payment confirmed " + orderId,
                     "Payment has been confirmed for order " + orderId + ". Prepare the order for delivery.",
@@ -147,8 +149,8 @@ public class NotificationService {
         String metadataJson = orderMetadata(order);
 
         notifyUser(order.getBuyerId(), "ORDER_STATUS_CHANGED", title, message, metadataJson);
-        if (order.getSellerId() != null) {
-            notifyUser(order.getSellerId(), "ORDER_STATUS_CHANGED", title, message, metadataJson);
+        for (Long sellerId : sellerIds(order)) {
+            notifyUser(sellerId, "ORDER_STATUS_CHANGED", title, message, metadataJson);
         }
         notifyRole(SUPER_ADMIN_ROLE, "ORDER_STATUS_CHANGED", title, message, metadataJson);
     }
@@ -167,14 +169,12 @@ public class NotificationService {
     }
 
     private void emailSeller(Order order, String subject, String body) {
-        if (order.getSellerId() == null) {
-            return;
+        for (Long sellerId : sellerIds(order)) {
+            userRepository.findById(sellerId)
+                    .map(User::getEmail)
+                    .filter(email -> email != null && !email.isBlank())
+                    .ifPresent(email -> accountEmailService.sendNotificationEmail(email, subject, body));
         }
-
-        userRepository.findById(order.getSellerId())
-                .map(User::getEmail)
-                .filter(email -> email != null && !email.isBlank())
-                .ifPresent(email -> accountEmailService.sendNotificationEmail(email, subject, body));
     }
 
     private void emailSuperAdmins(String subject, String body) {
@@ -190,9 +190,25 @@ public class NotificationService {
         return "{\"orderId\":" + order.getId()
                 + ",\"buyerId\":" + nullableNumber(order.getBuyerId())
                 + ",\"sellerId\":" + nullableNumber(order.getSellerId())
+                + ",\"sellerCount\":" + nullableNumber(order.getSellerCount() == null ? null : order.getSellerCount().longValue())
                 + ",\"paymentStatus\":\"" + jsonEscape(order.getPaymentStatus()) + "\""
                 + ",\"deliveryStatus\":\"" + jsonEscape(order.getDeliveryStatus()) + "\""
                 + "}";
+    }
+
+    private Set<Long> sellerIds(Order order) {
+        Set<Long> sellerIds = new LinkedHashSet<>();
+        if (order.getSellerId() != null) {
+            sellerIds.add(order.getSellerId());
+        }
+        if (order.getItems() != null) {
+            order.getItems().forEach(item -> {
+                if (item.getSellerId() != null) {
+                    sellerIds.add(item.getSellerId());
+                }
+            });
+        }
+        return sellerIds;
     }
 
     private String orderLabel(Order order) {

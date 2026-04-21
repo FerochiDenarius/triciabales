@@ -23,6 +23,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -73,50 +74,63 @@ public class OrderController {
         order.setUser(authenticatedUser);
 
         order.setDeliveryStatus("pending");
-        order.setPaymentStatus(
-                request.getPaymentStatus() != null
-                        ? request.getPaymentStatus()
-                        : (
-                        "cash".equalsIgnoreCase(request.getPaymentMethod())
-                                ? "pending"
-                                : "awaiting_payment"
-                )
-        );
+        order.setPaymentStatus(initialPaymentStatus(request.getPaymentMethod()));
 
         List<OrderItem> orderItems = new ArrayList<>();
         double total = 0;
-        Long sellerId = null;
-        String sellerName = null;
+        Map<Long, String> sellers = new LinkedHashMap<>();
+
+        if (request.getItems() == null || request.getItems().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cart is empty");
+        }
 
         for (CartItemDto item : request.getItems()) {
+            if (item.getBaleId() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cart item is missing product id");
+            }
+
             Bale bale = baleRepository.findById((int) item.getBaleId())
                     .orElseThrow(() -> new RuntimeException("Product not found"));
 
-            if (sellerId == null && bale.getSellerId() != null) {
-                sellerId = bale.getSellerId();
-                sellerName = bale.getSellerName();
+            if (bale.getSellerId() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product " + bale.getId() + " does not have a seller");
             }
 
-            if (sellerId != null && bale.getSellerId() != null && !sellerId.equals(bale.getSellerId())) {
-                throw new RuntimeException("Cart items from multiple sellers are not supported yet");
+            int quantity = item.getQuantity() == null ? 1 : item.getQuantity();
+            if (quantity <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid quantity for product " + bale.getId());
             }
+
+            sellers.putIfAbsent(bale.getSellerId(), bale.getSellerName());
 
             OrderItem orderItem = new OrderItem();
             orderItem.setBaleId(item.getBaleId());
-            orderItem.setBaleName(item.getBaleName());
-            orderItem.setPrice(item.getPrice());
-            orderItem.setQuantity(item.getQuantity());
+            orderItem.setBaleName(bale.getName());
+            orderItem.setPrice(bale.getPrice());
+            orderItem.setQuantity(quantity);
+            orderItem.setSellerId(bale.getSellerId());
+            orderItem.setSellerName(bale.getSellerName());
+            orderItem.setLineTotal(bale.getPrice() * quantity);
             orderItem.setOrder(order);
 
-            total += item.getPrice() * item.getQuantity();
+            total += orderItem.getLineTotal();
 
             orderItems.add(orderItem);
         }
 
         order.setItems(orderItems);
         order.setTotal(total);
-        order.setSellerId(sellerId);
-        order.setSellerName(sellerName);
+        order.setSellerCount(sellers.size());
+        if (sellers.size() == 1) {
+            Map.Entry<Long, String> seller = sellers.entrySet().iterator().next();
+            order.setSellerId(seller.getKey());
+            order.setSellerName(seller.getValue());
+        } else {
+            order.setSellerId(null);
+            order.setSellerName("Multiple sellers");
+        }
+        order.setCommissionAmount(roundMoney(total * 0.10));
+        order.setSellerPayoutAmount(roundMoney(total - order.getCommissionAmount()));
 
         Order savedOrder = orderRepository.save(order);
         notificationService.notifyOrderCreated(savedOrder);
@@ -155,7 +169,7 @@ public class OrderController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only view your own seller orders");
         }
 
-        return sortOrdersByNewestFirst(orderRepository.findBySellerId(sellerId));
+        return sortOrdersByNewestFirst(orderRepository.findOrdersForSeller(sellerId));
     }
 
     @PutMapping("/{id}/status")
@@ -174,7 +188,7 @@ public class OrderController {
         Order order = optionalOrder.get();
 
         boolean isPrivileged = "ADMIN".equalsIgnoreCase(actor.getRole()) || "SUPER_ADMIN".equalsIgnoreCase(actor.getRole());
-        boolean isSellerOwner = "SELLER".equalsIgnoreCase(actor.getRole()) && actor.getId().equals(order.getSellerId());
+        boolean isSellerOwner = "SELLER".equalsIgnoreCase(actor.getRole()) && orderContainsSeller(order, actor.getId());
 
         boolean deliveryStatusChanged = false;
         boolean paymentStatusChanged = false;
@@ -331,6 +345,31 @@ public class OrderController {
         return orders.stream()
                 .sorted(Comparator.comparing(Order::getId, Comparator.nullsLast(Long::compareTo)).reversed())
                 .toList();
+    }
+
+    private String initialPaymentStatus(String paymentMethod) {
+        if ("cash".equalsIgnoreCase(paymentMethod)) {
+            return "pending";
+        }
+        if ("bank".equalsIgnoreCase(paymentMethod)) {
+            return "awaiting_transfer";
+        }
+        return "awaiting_payment";
+    }
+
+    private boolean orderContainsSeller(Order order, Long sellerId) {
+        if (sellerId == null || order == null) {
+            return false;
+        }
+        if (sellerId.equals(order.getSellerId())) {
+            return true;
+        }
+        return order.getItems() != null
+                && order.getItems().stream().anyMatch(item -> sellerId.equals(item.getSellerId()));
+    }
+
+    private double roundMoney(double value) {
+        return Math.round(value * 100.0) / 100.0;
     }
 
     private boolean isPaidOrder(Order order) {

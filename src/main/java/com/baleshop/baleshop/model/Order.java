@@ -22,6 +22,7 @@ public class Order {
     private String notes;
     private Long sellerId;
     private String sellerName;
+    private Integer sellerCount;
 
     private Double total;
 
@@ -48,9 +49,15 @@ public class Order {
     private String paystackAccessCode;
     private String paystackAuthorizationUrl;
     private String paystackGatewayResponse;
+    private String paystackSplitMode;
+    private String paystackSplitReference;
+    private String paystackFeeBearer;
+    @Column(length = 4000)
+    private String paystackSplitPayload;
     private LocalDateTime paidAt;
     private Double commissionAmount;
     private Double sellerPayoutAmount;
+    private String commissionStatus;
     private Boolean payoutReleased = false;
     private Boolean confirmedByBuyer = false;
     private LocalDateTime createdAt;
@@ -165,6 +172,14 @@ public class Order {
 
     public void setSellerName(String sellerName) {
         this.sellerName = sellerName;
+    }
+
+    public Integer getSellerCount() {
+        return sellerCount;
+    }
+
+    public void setSellerCount(Integer sellerCount) {
+        this.sellerCount = sellerCount;
     }
 
     public Double getTotal() {
@@ -351,6 +366,38 @@ public class Order {
         this.paystackGatewayResponse = paystackGatewayResponse;
     }
 
+    public String getPaystackSplitMode() {
+        return paystackSplitMode;
+    }
+
+    public void setPaystackSplitMode(String paystackSplitMode) {
+        this.paystackSplitMode = paystackSplitMode;
+    }
+
+    public String getPaystackSplitReference() {
+        return paystackSplitReference;
+    }
+
+    public void setPaystackSplitReference(String paystackSplitReference) {
+        this.paystackSplitReference = paystackSplitReference;
+    }
+
+    public String getPaystackFeeBearer() {
+        return paystackFeeBearer;
+    }
+
+    public void setPaystackFeeBearer(String paystackFeeBearer) {
+        this.paystackFeeBearer = paystackFeeBearer;
+    }
+
+    public String getPaystackSplitPayload() {
+        return paystackSplitPayload;
+    }
+
+    public void setPaystackSplitPayload(String paystackSplitPayload) {
+        this.paystackSplitPayload = paystackSplitPayload;
+    }
+
     public LocalDateTime getPaidAt() {
         return paidAt;
     }
@@ -373,6 +420,14 @@ public class Order {
 
     public void setSellerPayoutAmount(Double sellerPayoutAmount) {
         this.sellerPayoutAmount = sellerPayoutAmount;
+    }
+
+    public String getCommissionStatus() {
+        return commissionStatus;
+    }
+
+    public void setCommissionStatus(String commissionStatus) {
+        this.commissionStatus = commissionStatus;
     }
 
     public Boolean getPayoutReleased() {
