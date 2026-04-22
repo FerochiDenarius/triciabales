@@ -67,6 +67,7 @@ public class OrderController {
         order.setLandmark(request.getLandmark());
         order.setNotes(request.getNotes());
         order.setDeliveryAddress(request.getDeliveryAddress());
+        order.setDeliveryPlaceId(request.getDeliveryPlaceId());
         order.setDeliveryDistanceKm(request.getDeliveryDistanceKm());
 
         order.setStatus("pending");
@@ -379,6 +380,7 @@ public class OrderController {
         estimateRequest.setArea(request.getArea());
         estimateRequest.setRegion(request.getRegion());
         estimateRequest.setLandmark(request.getLandmark());
+        estimateRequest.setPlaceId(request.getDeliveryPlaceId());
         estimateRequest.setItems(request.getItems());
 
         Map<String, Object> estimate = deliveryEstimateService.estimate(estimateRequest);

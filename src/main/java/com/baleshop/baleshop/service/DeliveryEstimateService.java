@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -35,6 +36,7 @@ import java.util.Set;
 public class DeliveryEstimateService {
 
     private static final String GOOGLE_DISTANCE_MATRIX_URL = "https://maps.googleapis.com/maps/api/distancematrix/json";
+    private static final String GOOGLE_PLACES_AUTOCOMPLETE_URL = "https://maps.googleapis.com/maps/api/place/autocomplete/json";
 
     private final BaleRepository baleRepository;
     private final UserRepository userRepository;
@@ -43,6 +45,9 @@ public class DeliveryEstimateService {
 
     @Value("${app.google.maps.api-key:}")
     private String googleMapsApiKey;
+
+    @Value("${app.delivery.default-origin-address:Oyarifa, Accra, Ghana}")
+    private String defaultOriginAddress;
 
     public DeliveryEstimateService(
             BaleRepository baleRepository,
@@ -61,6 +66,7 @@ public class DeliveryEstimateService {
         requireConfigured();
 
         String buyerAddress = buildBuyerAddress(request);
+        String buyerDestination = buildBuyerDestination(request, buyerAddress);
         if (buyerAddress == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Delivery address is required");
         }
@@ -77,13 +83,20 @@ public class DeliveryEstimateService {
         for (Long sellerId : sellerIds) {
             User seller = userRepository.findById(sellerId)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seller not found for delivery estimate"));
-            String shopAddress = normalizeAddress(seller.getShopAddress());
+            String shopAddress = firstNonBlank(seller.getShopAddress(), seller.getAddress(), defaultOriginAddress);
             if (shopAddress == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seller " + sellerId + " has no shop address for delivery estimate");
             }
 
-            DistanceResult distance = distance(shopAddress, buyerAddress);
-            double fee = calculateDeliveryFee(distance.distanceKm());
+            DistanceResult distance;
+            double fee;
+            if (isOutsideAccra(shopAddress)) {
+                distance = new DistanceResult(0.0, "Parcel service");
+                fee = 100.0;
+            } else {
+                distance = distance(shopAddress, buyerDestination);
+                fee = calculateDeliveryFee(distance.distanceKm());
+            }
             totalDistanceKm += distance.distanceKm();
             totalDeliveryFee += fee;
 
@@ -94,6 +107,7 @@ public class DeliveryEstimateService {
             sellerEstimate.put("distanceKm", round(distance.distanceKm()));
             sellerEstimate.put("durationText", distance.durationText());
             sellerEstimate.put("deliveryFee", fee);
+            sellerEstimate.put("outsideAccra", isOutsideAccra(shopAddress));
             sellerEstimates.add(sellerEstimate);
         }
 
@@ -104,8 +118,63 @@ public class DeliveryEstimateService {
         result.put("deliveryFee", round(totalDeliveryFee));
         result.put("currency", "GHS");
         result.put("pricing", "0-5km=40, 5-10km=60, 10-15km=80, 15-20km=100, over 20km=100+5/km");
+        result.put("outsideAccraPricing", "Seller shops outside Accra use fixed parcel delivery fee of GHS 100");
         result.put("sellerEstimates", sellerEstimates);
         return result;
+    }
+
+    public Map<String, Object> placePredictions(String input) {
+        requireConfigured();
+
+        String cleanInput = normalizeAddress(input);
+        if (cleanInput == null || cleanInput.length() < 3) {
+            return Map.of("success", true, "predictions", List.of());
+        }
+
+        String url = GOOGLE_PLACES_AUTOCOMPLETE_URL
+                + "?input=" + encode(cleanInput)
+                + "&components=country:gh"
+                + "&types=geocode"
+                + "&key=" + encode(googleMapsApiKey);
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(20))
+                    .GET()
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            JsonNode body = objectMapper.readTree(response.body());
+
+            if (response.statusCode() >= 400 || !"OK".equalsIgnoreCase(body.path("status").asText(""))
+                    && !"ZERO_RESULTS".equalsIgnoreCase(body.path("status").asText(""))) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, body.path("error_message").asText("Could not load address suggestions"));
+            }
+
+            List<Map<String, Object>> predictions = new ArrayList<>();
+            for (JsonNode prediction : body.path("predictions")) {
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("placeId", prediction.path("place_id").asText(""));
+                item.put("description", prediction.path("description").asText(""));
+                item.put("mainText", prediction.path("structured_formatting").path("main_text").asText(""));
+                item.put("secondaryText", prediction.path("structured_formatting").path("secondary_text").asText(""));
+                if (!String.valueOf(item.get("placeId")).isBlank() && !String.valueOf(item.get("description")).isBlank()) {
+                    predictions.add(item);
+                }
+            }
+
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("success", true);
+            result.put("predictions", predictions);
+            return result;
+        } catch (IOException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Could not reach Google Places");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Google Places request was interrupted");
+        } catch (JacksonException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Invalid Google Places response");
+        }
     }
 
     private DistanceResult distance(String origin, String destination) {
@@ -185,6 +254,14 @@ public class DeliveryEstimateService {
         return builder.isEmpty() ? null : builder.toString();
     }
 
+    private String buildBuyerDestination(DeliveryEstimateRequest request, String buyerAddress) {
+        String placeId = normalizeAddress(request.getPlaceId());
+        if (placeId != null) {
+            return "place_id:" + placeId;
+        }
+        return buyerAddress;
+    }
+
     private void append(StringBuilder builder, String value) {
         String clean = normalizeAddress(value);
         if (clean == null) {
@@ -201,6 +278,21 @@ public class DeliveryEstimateService {
             return null;
         }
         return value.trim();
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            String clean = normalizeAddress(value);
+            if (clean != null) {
+                return clean;
+            }
+        }
+        return null;
+    }
+
+    private boolean isOutsideAccra(String shopAddress) {
+        String normalized = shopAddress == null ? "" : shopAddress.toLowerCase(Locale.ROOT);
+        return !normalized.contains("accra") && !normalized.contains("tema");
     }
 
     private void requireConfigured() {

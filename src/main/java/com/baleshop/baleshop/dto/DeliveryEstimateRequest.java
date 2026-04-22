@@ -8,6 +8,7 @@ public class DeliveryEstimateRequest {
     private String region;
     private String area;
     private String landmark;
+    private String placeId;
     private List<CartItemDto> items;
 
     public DeliveryEstimateRequest() {
@@ -43,6 +44,14 @@ public class DeliveryEstimateRequest {
 
     public void setLandmark(String landmark) {
         this.landmark = landmark;
+    }
+
+    public String getPlaceId() {
+        return placeId;
+    }
+
+    public void setPlaceId(String placeId) {
+        this.placeId = placeId;
     }
 
     public List<CartItemDto> getItems() {

@@ -19,6 +19,7 @@ public class CheckoutRequest {
     private String momoNumber;
     private String cardEmail;
     private String deliveryAddress;
+    private String deliveryPlaceId;
     private Double deliveryDistanceKm;
     private Double deliveryFee;
     private Long userId;
@@ -138,6 +139,14 @@ public class CheckoutRequest {
 
     public void setDeliveryAddress(String deliveryAddress) {
         this.deliveryAddress = deliveryAddress;
+    }
+
+    public String getDeliveryPlaceId() {
+        return deliveryPlaceId;
+    }
+
+    public void setDeliveryPlaceId(String deliveryPlaceId) {
+        this.deliveryPlaceId = deliveryPlaceId;
     }
 
     public Double getDeliveryDistanceKm() {

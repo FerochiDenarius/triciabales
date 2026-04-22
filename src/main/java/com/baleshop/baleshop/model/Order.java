@@ -34,6 +34,7 @@ public class Order {
     private String trackingUrl;
     private Double deliveryFee;
     private String deliveryAddress;
+    private String deliveryPlaceId;
     private Double deliveryDistanceKm;
     private String pickupAddress;
     private String dropoffAddress;
@@ -254,6 +255,14 @@ public class Order {
 
     public void setDeliveryAddress(String deliveryAddress) {
         this.deliveryAddress = deliveryAddress;
+    }
+
+    public String getDeliveryPlaceId() {
+        return deliveryPlaceId;
+    }
+
+    public void setDeliveryPlaceId(String deliveryPlaceId) {
+        this.deliveryPlaceId = deliveryPlaceId;
     }
 
     public Double getDeliveryDistanceKm() {
