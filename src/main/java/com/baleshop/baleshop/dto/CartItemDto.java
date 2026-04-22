@@ -6,6 +6,7 @@ public class CartItemDto {
     private String baleName;
     private Double price;
     private Integer quantity;
+    private String selectedSize;
 
     public CartItemDto() {
     }
@@ -40,5 +41,13 @@ public class CartItemDto {
 
     public void setQuantity(Integer quantity) {
         this.quantity = quantity;
+    }
+
+    public String getSelectedSize() {
+        return selectedSize;
+    }
+
+    public void setSelectedSize(String selectedSize) {
+        this.selectedSize = selectedSize;
     }
 }

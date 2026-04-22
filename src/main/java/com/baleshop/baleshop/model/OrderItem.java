@@ -17,6 +17,7 @@ public class OrderItem {
     private Integer quantity;
     private Long sellerId;
     private String sellerName;
+    private String selectedSize;
     private Double lineTotal;
     private Double commissionAmount;
     private Double sellerPayoutAmount;
@@ -82,6 +83,14 @@ public class OrderItem {
 
     public void setSellerName(String sellerName) {
         this.sellerName = sellerName;
+    }
+
+    public String getSelectedSize() {
+        return selectedSize;
+    }
+
+    public void setSelectedSize(String selectedSize) {
+        this.selectedSize = selectedSize;
     }
 
     public Double getLineTotal() {

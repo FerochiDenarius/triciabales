@@ -117,6 +117,7 @@ public class OrderController {
             orderItem.setQuantity(quantity);
             orderItem.setSellerId(bale.getSellerId());
             orderItem.setSellerName(bale.getSellerName());
+            orderItem.setSelectedSize(item.getSelectedSize());
             orderItem.setLineTotal(bale.getPrice() * quantity);
             orderItem.setOrder(order);
 
