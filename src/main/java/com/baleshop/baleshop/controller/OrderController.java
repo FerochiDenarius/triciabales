@@ -2,6 +2,7 @@ package com.baleshop.baleshop.controller;
 
 import com.baleshop.baleshop.dto.CartItemDto;
 import com.baleshop.baleshop.dto.CheckoutRequest;
+import com.baleshop.baleshop.dto.DeliveryEstimateRequest;
 import com.baleshop.baleshop.dto.RefundRequest;
 import com.baleshop.baleshop.model.Order;
 import com.baleshop.baleshop.model.OrderItem;
@@ -11,6 +12,7 @@ import com.baleshop.baleshop.repository.BaleRepository;
 import com.baleshop.baleshop.repository.OrderRepository;
 import com.baleshop.baleshop.repository.UserRepository;
 import com.baleshop.baleshop.service.NotificationService;
+import com.baleshop.baleshop.service.DeliveryEstimateService;
 import com.baleshop.baleshop.service.RefundService;
 import com.baleshop.baleshop.service.SessionAuthService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -48,6 +50,8 @@ public class OrderController {
     @Autowired
     private NotificationService notificationService;
     @Autowired
+    private DeliveryEstimateService deliveryEstimateService;
+    @Autowired
     private RefundService refundService;
 
     @PostMapping("/checkout")
@@ -62,6 +66,8 @@ public class OrderController {
         order.setArea(request.getArea());
         order.setLandmark(request.getLandmark());
         order.setNotes(request.getNotes());
+        order.setDeliveryAddress(request.getDeliveryAddress());
+        order.setDeliveryDistanceKm(request.getDeliveryDistanceKm());
 
         order.setStatus("pending");
 
@@ -118,8 +124,11 @@ public class OrderController {
             orderItems.add(orderItem);
         }
 
+        double productSubtotal = total;
+        applyDeliveryEstimate(order, request);
         order.setItems(orderItems);
-        order.setTotal(total);
+        double deliveryFee = order.getDeliveryFee() == null ? 0.0 : order.getDeliveryFee();
+        order.setTotal(roundMoney(productSubtotal + deliveryFee));
         order.setSellerCount(sellers.size());
         if (sellers.size() == 1) {
             Map.Entry<Long, String> seller = sellers.entrySet().iterator().next();
@@ -129,8 +138,8 @@ public class OrderController {
             order.setSellerId(null);
             order.setSellerName("Multiple sellers");
         }
-        order.setCommissionAmount(roundMoney(total * 0.10));
-        order.setSellerPayoutAmount(roundMoney(total - order.getCommissionAmount()));
+        order.setCommissionAmount(roundMoney(productSubtotal * 0.10));
+        order.setSellerPayoutAmount(roundMoney(productSubtotal - order.getCommissionAmount()));
 
         Order savedOrder = orderRepository.save(order);
         notificationService.notifyOrderCreated(savedOrder);
@@ -355,6 +364,41 @@ public class OrderController {
             return "awaiting_transfer";
         }
         return "awaiting_payment";
+    }
+
+    private void applyDeliveryEstimate(Order order, CheckoutRequest request) {
+        if ("pickup".equalsIgnoreCase(request.getDeliveryMethod())) {
+            order.setDeliveryFee(0.0);
+            order.setDeliveryDistanceKm(null);
+            order.setDeliveryAddress(null);
+            return;
+        }
+
+        DeliveryEstimateRequest estimateRequest = new DeliveryEstimateRequest();
+        estimateRequest.setAddress(request.getAddress());
+        estimateRequest.setArea(request.getArea());
+        estimateRequest.setRegion(request.getRegion());
+        estimateRequest.setLandmark(request.getLandmark());
+        estimateRequest.setItems(request.getItems());
+
+        Map<String, Object> estimate = deliveryEstimateService.estimate(estimateRequest);
+        order.setDeliveryFee(numberValue(estimate.get("deliveryFee"), 0.0));
+        order.setDeliveryDistanceKm(numberValue(estimate.get("distanceKm"), null));
+        order.setDeliveryAddress(String.valueOf(estimate.getOrDefault("buyerAddress", "")));
+    }
+
+    private Double numberValue(Object value, Double fallback) {
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+        if (value instanceof String text && !text.isBlank()) {
+            try {
+                return Double.parseDouble(text);
+            } catch (NumberFormatException ignored) {
+                return fallback;
+            }
+        }
+        return fallback;
     }
 
     private boolean orderContainsSeller(Order order, Long sellerId) {

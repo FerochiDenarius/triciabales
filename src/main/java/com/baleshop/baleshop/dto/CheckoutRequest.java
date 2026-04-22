@@ -18,6 +18,9 @@ public class CheckoutRequest {
     private String momoNetwork;
     private String momoNumber;
     private String cardEmail;
+    private String deliveryAddress;
+    private Double deliveryDistanceKm;
+    private Double deliveryFee;
     private Long userId;
 
     private List<CartItemDto> items;
@@ -127,6 +130,30 @@ public class CheckoutRequest {
 
     public void setCardEmail(String cardEmail) {
         this.cardEmail = cardEmail;
+    }
+
+    public String getDeliveryAddress() {
+        return deliveryAddress;
+    }
+
+    public void setDeliveryAddress(String deliveryAddress) {
+        this.deliveryAddress = deliveryAddress;
+    }
+
+    public Double getDeliveryDistanceKm() {
+        return deliveryDistanceKm;
+    }
+
+    public void setDeliveryDistanceKm(Double deliveryDistanceKm) {
+        this.deliveryDistanceKm = deliveryDistanceKm;
+    }
+
+    public Double getDeliveryFee() {
+        return deliveryFee;
+    }
+
+    public void setDeliveryFee(Double deliveryFee) {
+        this.deliveryFee = deliveryFee;
     }
 
     public Long getUserId() {

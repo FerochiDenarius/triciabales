@@ -430,8 +430,9 @@ public class PaystackService {
             split.mode = "single_subaccount";
             split.singleSellerSubaccount = seller.subaccountCode;
             split.feeBearer = "subaccount";
-            split.commissionPesewas = commissionFor(amountInPesewas);
-            split.sellerPayoutPesewas = amountInPesewas - split.commissionPesewas;
+            long productCommission = commissionFor(seller.grossPesewas);
+            split.sellerPayoutPesewas = seller.grossPesewas - productCommission;
+            split.commissionPesewas = amountInPesewas - split.sellerPayoutPesewas;
             applyItemSplitAmounts(sellerShares, split.commissionPesewas, split.sellerPayoutPesewas);
             return split;
         }
