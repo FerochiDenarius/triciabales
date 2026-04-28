@@ -43,6 +43,7 @@ public class PaystackService {
 
     private static final String PAYSTACK_BASE_URL = "https://api.paystack.co";
     private static final BigDecimal PLATFORM_COMMISSION_RATE = BigDecimal.valueOf(0.10);
+    private static final double SELLER_SUBACCOUNT_PERCENTAGE_CHARGE = 90.0;
 
     private final OrderRepository orderRepository;
     private final OrderRefundRepository refundRepository;
@@ -220,27 +221,28 @@ public class PaystackService {
         if (seller == null || seller.getId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seller is required");
         }
-        if (seller.getBankCode() == null || seller.getBankCode().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seller bank code is required for Paystack subaccount setup");
-        }
-        if (seller.getBankAccountNumber() == null || seller.getBankAccountNumber().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seller account number is required for Paystack subaccount setup");
-        }
+        validateSellerPayoutDetails(seller);
 
         String businessName = firstNonBlank(seller.getShopName(), seller.getName(), "Yenkasa seller " + seller.getId());
+        String settlementBank = resolveSettlementBankCode(seller);
+        String settlementAccountNumber = seller.getMomoNumber().trim();
+        String settlementAccountName = firstNonBlank(seller.getBankAccountName(), seller.getName(), businessName);
 
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("sellerId", seller.getId());
         metadata.put("sellerEmail", seller.getEmail());
+        metadata.put("payoutMethod", "momo");
+        metadata.put("momoNumber", settlementAccountNumber);
+        metadata.put("momoNetwork", seller.getMomoNetwork());
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("business_name", businessName);
-        payload.put("settlement_bank", seller.getBankCode().trim());
-        payload.put("account_number", seller.getBankAccountNumber().trim());
-        payload.put("percentage_charge", PLATFORM_COMMISSION_RATE.multiply(BigDecimal.valueOf(100)).doubleValue());
+        payload.put("settlement_bank", settlementBank);
+        payload.put("account_number", settlementAccountNumber);
+        payload.put("percentage_charge", SELLER_SUBACCOUNT_PERCENTAGE_CHARGE);
         payload.put("description", "Yenkasa Store seller #" + seller.getId());
         payload.put("primary_contact_email", seller.getEmail());
-        payload.put("primary_contact_name", seller.getName());
+        payload.put("primary_contact_name", settlementAccountName);
         payload.put("primary_contact_phone", seller.getPhone());
         payload.put("metadata", toJsonString(metadata));
 
@@ -256,6 +258,11 @@ public class PaystackService {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, response.path("message").asText("Could not configure seller Paystack subaccount"));
         }
 
+        seller.setPayoutMethod("momo");
+        seller.setBankCode(settlementBank);
+        seller.setBankName(normalizeMomoNetworkName(seller.getMomoNetwork()));
+        seller.setBankAccountNumber(settlementAccountNumber);
+        seller.setBankAccountName(settlementAccountName);
         seller.setPaystackSubaccountCode(data.path("subaccount_code").asText(seller.getPaystackSubaccountCode()));
         seller.setPaystackSubaccountId(data.path("id").asText(seller.getPaystackSubaccountId()));
         seller.setPaystackSubaccountVerified(data.path("is_verified").asBoolean(false));
@@ -307,6 +314,20 @@ public class PaystackService {
         result.put("paid", "paid".equalsIgnoreCase(order.getPaymentStatus()));
         result.put("order", order);
         return result;
+    }
+
+    public User ensureSellerSubaccount(User seller) {
+        if (seller == null || seller.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seller is required");
+        }
+
+        validateSellerPayoutDetails(seller);
+
+        if (seller.getPaystackSubaccountCode() != null && !seller.getPaystackSubaccountCode().isBlank()) {
+            return seller;
+        }
+
+        return createOrUpdateSellerSubaccount(seller);
     }
 
     public boolean isValidWebhookSignature(String payload, String signature) {
@@ -481,10 +502,8 @@ public class PaystackService {
         User seller = userRepository.findById(sellerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seller not found for Paystack split"));
 
+        seller = ensureSellerSubaccount(seller);
         String subaccountCode = seller.getPaystackSubaccountCode();
-        if (subaccountCode == null || subaccountCode.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seller #" + sellerId + " does not have an active Paystack subaccount");
-        }
 
         SellerShare share = new SellerShare();
         share.sellerId = sellerId;
@@ -578,6 +597,53 @@ public class PaystackService {
         order.setPaymentStatus(amount >= total ? "refunded" : "partially_refunded");
         order.setPayoutHeldAt(null);
         order.setPayoutHoldReason(null);
+    }
+
+    private void validateSellerPayoutDetails(User seller) {
+        if (seller.getMomoNumber() == null || seller.getMomoNumber().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seller has not set payout details");
+        }
+        if (seller.getMomoNetwork() == null || seller.getMomoNetwork().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seller has not set payout details");
+        }
+        if (firstNonBlank(seller.getBankAccountName(), seller.getName(), seller.getShopName()) == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seller has not set payout details");
+        }
+        resolveSettlementBankCode(seller);
+    }
+
+    private String resolveSettlementBankCode(User seller) {
+        String explicitBankCode = seller.getBankCode();
+        if (explicitBankCode != null && !explicitBankCode.isBlank()) {
+            return explicitBankCode.trim();
+        }
+        return getBankCode(seller.getMomoNetwork());
+    }
+
+    private String getBankCode(String network) {
+        if (network == null || network.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported network");
+        }
+
+        return switch (network.trim().toLowerCase(Locale.ROOT)) {
+            case "mtn", "mtn momo", "mtn mobile money" -> "MTN";
+            case "vodafone", "telecel", "vodafone cash", "telecel cash" -> "VOD";
+            case "airteltigo", "airtel tigo", "airteltigo money" -> "ATL";
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported network");
+        };
+    }
+
+    private String normalizeMomoNetworkName(String network) {
+        if (network == null || network.isBlank()) {
+            return null;
+        }
+
+        return switch (network.trim().toLowerCase(Locale.ROOT)) {
+            case "mtn", "mtn momo", "mtn mobile money" -> "MTN";
+            case "vodafone", "telecel", "vodafone cash", "telecel cash" -> "Vodafone";
+            case "airteltigo", "airtel tigo", "airteltigo money" -> "AirtelTigo";
+            default -> network.trim();
+        };
     }
 
     private JsonNode postJson(String path, Map<String, Object> payload) {

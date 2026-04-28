@@ -82,7 +82,7 @@ public class RefundService {
         if (order.getRefundRequestedAt() == null) {
             order.setRefundRequestedAt(LocalDateTime.now());
         }
-        if (!Boolean.TRUE.equals(order.getPayoutReleased()) && isPaidOrder(order)) {
+        if (!Boolean.TRUE.equals(order.getPayoutReleased()) && isPaidOrder(order) && !isAutoSplitPaystackOrder(order)) {
             order.setPaymentStatus("payout_on_hold");
             order.setPayoutHeldAt(LocalDateTime.now());
             order.setPayoutHoldReason("Refund request pending review");
@@ -230,6 +230,10 @@ public class RefundService {
     }
 
     private void releaseRefundHoldIfEligible(Order order) {
+        if (isAutoSplitPaystackOrder(order)) {
+            return;
+        }
+
         if (Boolean.TRUE.equals(order.getPayoutReleased())) {
             return;
         }
@@ -243,6 +247,13 @@ public class RefundService {
             order.setPayoutHeldAt(null);
             order.setPayoutHoldReason(null);
         }
+    }
+
+    private boolean isAutoSplitPaystackOrder(Order order) {
+        return order != null
+                && "paystack".equalsIgnoreCase(order.getPaymentMethod())
+                && order.getPaystackSplitMode() != null
+                && !order.getPaystackSplitMode().isBlank();
     }
 
     private void applyRefundedPaymentStatus(Order order, Double refundAmount) {

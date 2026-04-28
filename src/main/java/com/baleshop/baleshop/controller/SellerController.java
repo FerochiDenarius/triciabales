@@ -49,7 +49,7 @@ public class SellerController {
         user.setBankName(request.getBankName());
         user.setBankCode(request.getBankCode());
         user.setBankAccountNumber(request.getBankAccountNumber());
-        user.setBankAccountName(request.getBankAccountName());
+        user.setBankAccountName(firstNonBlank(request.getBankAccountName(), user.getBankAccountName(), user.getName(), user.getShopName()));
         if (!"SELLER".equalsIgnoreCase(actor.getRole())
                 && request.getPaystackSubaccountCode() != null
                 && !request.getPaystackSubaccountCode().isBlank()) {
@@ -66,9 +66,21 @@ public class SellerController {
     }
 
     private boolean canCreatePaystackSubaccount(User user) {
-        return user.getBankCode() != null && !user.getBankCode().isBlank()
-                && user.getBankAccountNumber() != null && !user.getBankAccountNumber().isBlank()
+        return user.getMomoNetwork() != null && !user.getMomoNetwork().isBlank()
+                && user.getMomoNumber() != null && !user.getMomoNumber().isBlank()
                 && (user.getShopName() != null && !user.getShopName().isBlank()
                     || user.getName() != null && !user.getName().isBlank());
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 }

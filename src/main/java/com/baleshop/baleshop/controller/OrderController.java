@@ -25,10 +25,12 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -86,6 +88,7 @@ public class OrderController {
         List<OrderItem> orderItems = new ArrayList<>();
         double total = 0;
         Map<Long, String> sellers = new LinkedHashMap<>();
+        Set<Long> validatedSellerIds = new HashSet<>();
 
         if (request.getItems() == null || request.getItems().isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cart is empty");
@@ -102,6 +105,8 @@ public class OrderController {
             if (bale.getSellerId() == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product " + bale.getId() + " does not have a seller");
             }
+
+            validateSellerPayoutReady(bale.getSellerId(), validatedSellerIds);
 
             int quantity = item.getQuantity() == null ? 1 : item.getQuantity();
             if (quantity <= 0) {
@@ -230,6 +235,9 @@ public class OrderController {
             if (!"SUPER_ADMIN".equalsIgnoreCase(actor.getRole())) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only SUPER_ADMIN can hold payouts");
             }
+            if (isAutoSplitPaystackOrder(order)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Automatic split payouts are already handled by Paystack");
+            }
             if (!isPayoutReleaseEligible(order)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order must be delivered or confirmed by buyer before payout hold");
             }
@@ -244,6 +252,9 @@ public class OrderController {
             if (!"SUPER_ADMIN".equalsIgnoreCase(actor.getRole())) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only SUPER_ADMIN can resume payouts");
             }
+            if (isAutoSplitPaystackOrder(order)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Automatic split payouts are already handled by Paystack");
+            }
             if (!isPayoutReleaseEligible(order)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order must be delivered or confirmed by buyer before payout release");
             }
@@ -257,6 +268,9 @@ public class OrderController {
         if (updates.containsKey("releasePayout") && "true".equals(updates.get("releasePayout"))) {
             if (!"SUPER_ADMIN".equalsIgnoreCase(actor.getRole())) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only SUPER_ADMIN can release payouts");
+            }
+            if (isAutoSplitPaystackOrder(order)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Automatic split payouts are already handled by Paystack");
             }
             if (!isPayoutReleaseEligible(order)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order must be delivered or confirmed by buyer before payout");
@@ -310,7 +324,9 @@ public class OrderController {
 
         order.setConfirmedByBuyer(true);
         order.setBuyerConfirmedAt(LocalDateTime.now());
-        order.setPaymentStatus("ready_for_payout");
+        if (!isAutoSplitPaystackOrder(order)) {
+            order.setPaymentStatus("ready_for_payout");
+        }
 
         orderRepository.save(order);
         notificationService.notifyOrderStatusChanged(order, "Buyer confirmation", "received");
@@ -435,6 +451,7 @@ public class OrderController {
         String paymentStatus = order.getPaymentStatus() == null ? "" : order.getPaymentStatus().trim();
 
         return isPaidOrder(order)
+                && !isAutoSplitPaystackOrder(order)
                 && !"ready_for_payout".equalsIgnoreCase(paymentStatus)
                 && !"payout_on_hold".equalsIgnoreCase(paymentStatus)
                 && !"payout_released".equalsIgnoreCase(paymentStatus)
@@ -444,5 +461,26 @@ public class OrderController {
     private boolean isPayoutReleaseEligible(Order order) {
         return Boolean.TRUE.equals(order.getConfirmedByBuyer())
                 || "delivered".equalsIgnoreCase(order.getDeliveryStatus());
+    }
+
+    private void validateSellerPayoutReady(Long sellerId, Set<Long> validatedSellerIds) {
+        if (sellerId == null || !validatedSellerIds.add(sellerId)) {
+            return;
+        }
+
+        User seller = userRepository.findById(sellerId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seller not found"));
+
+        if (seller.getMomoNumber() == null || seller.getMomoNumber().isBlank()
+                || seller.getMomoNetwork() == null || seller.getMomoNetwork().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seller has not set payout details");
+        }
+    }
+
+    private boolean isAutoSplitPaystackOrder(Order order) {
+        return order != null
+                && "paystack".equalsIgnoreCase(order.getPaymentMethod())
+                && order.getPaystackSplitMode() != null
+                && !order.getPaystackSplitMode().isBlank();
     }
 }
