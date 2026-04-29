@@ -82,11 +82,6 @@ public class RefundService {
         if (order.getRefundRequestedAt() == null) {
             order.setRefundRequestedAt(LocalDateTime.now());
         }
-        if (!Boolean.TRUE.equals(order.getPayoutReleased()) && isPaidOrder(order) && !isAutoSplitPaystackOrder(order)) {
-            order.setPaymentStatus("payout_on_hold");
-            order.setPayoutHeldAt(LocalDateTime.now());
-            order.setPayoutHoldReason("Refund request pending review");
-        }
         orderRepository.save(order);
 
         notificationService.notifySensitiveActivity(
@@ -116,7 +111,6 @@ public class RefundService {
             markReviewed(refund, actor, STATUS_REJECTED);
             order.setRefundStatus(STATUS_REJECTED);
             order.setRefundReviewedAt(refund.getReviewedAt());
-            releaseRefundHoldIfEligible(order);
         } else if (STATUS_PROCESSED.equals(nextStatus)) {
             if (!STATUS_APPROVED.equalsIgnoreCase(refund.getStatus())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Refund must be approved before processing");
@@ -217,43 +211,8 @@ public class RefundService {
         String status = order.getStatus() == null ? "" : order.getStatus().trim();
 
         return "paid".equalsIgnoreCase(paymentStatus)
-                || "ready_for_payout".equalsIgnoreCase(paymentStatus)
-                || "payout_on_hold".equalsIgnoreCase(paymentStatus)
-                || "payout_released".equalsIgnoreCase(paymentStatus)
                 || "paid".equalsIgnoreCase(status)
                 || order.getPaidAt() != null;
-    }
-
-    private boolean isPayoutReleaseEligible(Order order) {
-        return Boolean.TRUE.equals(order.getConfirmedByBuyer())
-                || "delivered".equalsIgnoreCase(order.getDeliveryStatus());
-    }
-
-    private void releaseRefundHoldIfEligible(Order order) {
-        if (isAutoSplitPaystackOrder(order)) {
-            return;
-        }
-
-        if (Boolean.TRUE.equals(order.getPayoutReleased())) {
-            return;
-        }
-
-        if (!"payout_on_hold".equalsIgnoreCase(order.getPaymentStatus())) {
-            return;
-        }
-
-        if (isPayoutReleaseEligible(order)) {
-            order.setPaymentStatus("ready_for_payout");
-            order.setPayoutHeldAt(null);
-            order.setPayoutHoldReason(null);
-        }
-    }
-
-    private boolean isAutoSplitPaystackOrder(Order order) {
-        return order != null
-                && "paystack".equalsIgnoreCase(order.getPaymentMethod())
-                && order.getPaystackSplitMode() != null
-                && !order.getPaystackSplitMode().isBlank();
     }
 
     private void applyRefundedPaymentStatus(Order order, Double refundAmount) {
@@ -283,6 +242,7 @@ public class RefundService {
         result.put("paystackRefundId", refund.getPaystackRefundId());
         result.put("paystackRefundStatus", refund.getPaystackRefundStatus());
         result.put("createdAt", refund.getCreatedAt());
+        result.put("message", "Refunds are processed through Paystack using the transaction reference.");
         return result;
     }
 

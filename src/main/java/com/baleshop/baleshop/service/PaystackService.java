@@ -43,7 +43,9 @@ public class PaystackService {
 
     private static final String PAYSTACK_BASE_URL = "https://api.paystack.co";
     private static final BigDecimal PLATFORM_COMMISSION_RATE = BigDecimal.valueOf(0.10);
-    private static final double SELLER_SUBACCOUNT_PERCENTAGE_CHARGE = 90.0;
+    private static final double PLATFORM_SUBACCOUNT_PERCENTAGE_CHARGE = 10.0;
+    private static final String SPLIT_MODE_SUBACCOUNT = "paystack_subaccount";
+    private static final String PAYOUT_STATUS_NOT_REQUIRED = "not_required";
 
     private final OrderRepository orderRepository;
     private final OrderRefundRepository refundRepository;
@@ -136,11 +138,21 @@ public class PaystackService {
         requireConfigured();
 
         if (order.getTotal() == null || order.getTotal() <= 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order total must be greater than zero");
+            throw new PaymentApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_ORDER_TOTAL",
+                    "Order total must be greater than zero",
+                    "Checkout cannot initialize Paystack until the order has a valid positive total."
+            );
         }
 
         if ("paid".equalsIgnoreCase(order.getPaymentStatus())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order is already paid");
+            throw new PaymentApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "ORDER_ALREADY_PAID",
+                    "Order is already paid",
+                    "Do not initialize another Paystack transaction for an order that has already been verified as paid."
+            );
         }
 
         String customerEmail = cleanEmail(email);
@@ -151,7 +163,12 @@ public class PaystackService {
             customerEmail = cleanEmail(order.getBuyerEmail());
         }
         if (customerEmail == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A valid email is required for Paystack payment");
+            throw new PaymentApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "CUSTOMER_EMAIL_REQUIRED",
+                    "A valid email is required for Paystack payment",
+                    "Ask the buyer for a valid email address before checkout."
+            );
         }
 
         String reference = "YENKASA-" + order.getId() + "-" + System.currentTimeMillis();
@@ -199,9 +216,15 @@ public class PaystackService {
                 ? paymentSplit.feeBearer
                 : paymentSplit.feeBearer + ":" + paymentSplit.feeBearerSubaccount);
         order.setPaystackSplitPayload(paymentSplit.dynamicSplit == null ? null : toJsonString(paymentSplit.dynamicSplit));
+        order.setSellerSubaccountCode(String.join(",", paymentSplit.sellerSubaccountCodes));
+        order.setGrossAmount(pesewasToAmount(amountInPesewas));
+        order.setPlatformCommissionAmount(pesewasToAmount(paymentSplit.commissionPesewas));
+        order.setSellerSettlementAmount(pesewasToAmount(paymentSplit.sellerPayoutPesewas));
         order.setCommissionAmount(pesewasToAmount(paymentSplit.commissionPesewas));
         order.setSellerPayoutAmount(pesewasToAmount(paymentSplit.sellerPayoutPesewas));
-        order.setCommissionStatus("paystack_split_pending");
+        order.setCommissionStatus("split_pending");
+        order.setPayoutStatus(PAYOUT_STATUS_NOT_REQUIRED);
+        order.setPayoutReleased(false);
         orderRepository.save(order);
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -212,6 +235,11 @@ public class PaystackService {
         result.put("amount", order.getTotal());
         result.put("splitMode", order.getPaystackSplitMode());
         result.put("sellerCount", paymentSplit.sellerCount);
+        result.put("sellerSubaccountCode", order.getSellerSubaccountCode());
+        result.put("grossAmount", order.getGrossAmount());
+        result.put("platformCommissionAmount", order.getPlatformCommissionAmount());
+        result.put("sellerSettlementAmount", order.getSellerSettlementAmount());
+        result.put("payoutStatus", order.getPayoutStatus());
         return result;
     }
 
@@ -219,7 +247,7 @@ public class PaystackService {
         requireConfigured();
 
         if (seller == null || seller.getId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seller is required");
+            throw new PaymentApiException(HttpStatus.BAD_REQUEST, "SELLER_REQUIRED", "Seller is required", "A seller account is required before creating a Paystack subaccount.");
         }
         validateSellerPayoutDetails(seller);
 
@@ -239,7 +267,7 @@ public class PaystackService {
         payload.put("business_name", businessName);
         payload.put("settlement_bank", settlementBank);
         payload.put("account_number", settlementAccountNumber);
-        payload.put("percentage_charge", SELLER_SUBACCOUNT_PERCENTAGE_CHARGE);
+        payload.put("percentage_charge", PLATFORM_SUBACCOUNT_PERCENTAGE_CHARGE);
         payload.put("description", "Yenkasa Store seller #" + seller.getId());
         payload.put("primary_contact_email", seller.getEmail());
         payload.put("primary_contact_name", settlementAccountName);
@@ -255,7 +283,12 @@ public class PaystackService {
 
         JsonNode data = response.path("data");
         if (!response.path("status").asBoolean(false) || data.isMissingNode()) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, response.path("message").asText("Could not configure seller Paystack subaccount"));
+            throw new PaymentApiException(
+                    HttpStatus.BAD_GATEWAY,
+                    "SELLER_SUBACCOUNT_CREATE_FAILED",
+                    "Seller Paystack subaccount could not be created",
+                    response.path("message").asText("Check the seller MoMo payout settings and Paystack dashboard.")
+            );
         }
 
         seller.setPayoutMethod("momo");
@@ -278,7 +311,7 @@ public class PaystackService {
         requireConfigured();
 
         if (reference == null || reference.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment reference is required");
+            throw new PaymentApiException(HttpStatus.BAD_REQUEST, "PAYSTACK_REFERENCE_REQUIRED", "Payment reference is required", "Provide the Paystack reference returned by transaction initialization.");
         }
 
         Order order = orderRepository.findByPaystackReference(reference)
@@ -289,18 +322,19 @@ public class PaystackService {
         String paystackStatus = data.path("status").asText("");
 
         if (!response.path("status").asBoolean(false) || data.isMissingNode()) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, response.path("message").asText("Could not verify Paystack payment"));
+            throw new PaymentApiException(HttpStatus.BAD_GATEWAY, "PAYSTACK_VERIFY_FAILED", "Paystack transaction verification failed", response.path("message").asText("Check the Paystack transaction reference."));
         }
 
         long expectedAmount = amountToPesewas(order.getTotal());
         long paidAmount = data.path("amount").asLong(0);
 
         if ("success".equalsIgnoreCase(paystackStatus) && expectedAmount == paidAmount) {
+            validateSplitMetadataForSuccessfulPayment(order);
             markOrderPaid(order, data);
         } else if ("success".equalsIgnoreCase(paystackStatus)) {
             order.setPaystackGatewayResponse("amount_mismatch");
             orderRepository.save(order);
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment amount does not match order total");
+            throw new PaymentApiException(HttpStatus.BAD_REQUEST, "PAYSTACK_AMOUNT_MISMATCH", "Payment amount does not match order total", "Do not mark this order paid until the Paystack amount matches the Yenkasa order total.");
         } else {
             order.setPaystackGatewayResponse(paystackStatus);
             orderRepository.save(order);
@@ -316,16 +350,56 @@ public class PaystackService {
         return result;
     }
 
+    public Map<String, Object> auditPayments() {
+        return Map.of(
+                "success", true,
+                "message", "Use /api/paystack/audit/{reference} to verify live Paystack status for a specific real-cash payment.",
+                "orders", orderRepository.findAll().stream()
+                        .filter(order -> order.getPaystackReference() != null && !order.getPaystackReference().isBlank())
+                        .sorted((left, right) -> Long.compare(
+                                right.getId() == null ? 0 : right.getId(),
+                                left.getId() == null ? 0 : left.getId()
+                        ))
+                        .map(order -> paymentAudit(order, null))
+                        .toList()
+        );
+    }
+
+    public Map<String, Object> auditPayment(String reference) {
+        requireConfigured();
+        if (reference == null || reference.isBlank()) {
+            throw new PaymentApiException(HttpStatus.BAD_REQUEST, "PAYSTACK_REFERENCE_REQUIRED", "Payment reference is required", "Provide the Paystack reference to audit the transaction.");
+        }
+        Order order = orderRepository.findByPaystackReference(reference)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found for payment reference"));
+        JsonNode response = getJson("/transaction/verify/" + encodePath(reference));
+        JsonNode data = response.path("data");
+        if (!response.path("status").asBoolean(false) || data.isMissingNode()) {
+            throw new PaymentApiException(HttpStatus.BAD_GATEWAY, "PAYSTACK_VERIFY_FAILED", "Paystack transaction verification failed", response.path("message").asText("Check the Paystack transaction reference."));
+        }
+        return paymentAudit(order, data);
+    }
+
+    public String transactionStatus(String reference) {
+        requireConfigured();
+        if (reference == null || reference.isBlank()) {
+            throw new PaymentApiException(HttpStatus.BAD_REQUEST, "PAYSTACK_REFERENCE_REQUIRED", "Payment reference is required", "Provide the Paystack reference before changing this order.");
+        }
+
+        JsonNode response = getJson("/transaction/verify/" + encodePath(reference));
+        JsonNode data = response.path("data");
+        if (!response.path("status").asBoolean(false) || data.isMissingNode()) {
+            throw new PaymentApiException(HttpStatus.BAD_GATEWAY, "PAYSTACK_VERIFY_FAILED", "Paystack transaction verification failed", response.path("message").asText("Check the Paystack transaction reference."));
+        }
+        return data.path("status").asText("");
+    }
+
     public User ensureSellerSubaccount(User seller) {
         if (seller == null || seller.getId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seller is required");
+            throw new PaymentApiException(HttpStatus.BAD_REQUEST, "SELLER_REQUIRED", "Seller is required", "A seller account is required before creating a Paystack subaccount.");
         }
 
         validateSellerPayoutDetails(seller);
-
-        if (seller.getPaystackSubaccountCode() != null && !seller.getPaystackSubaccountCode().isBlank()) {
-            return seller;
-        }
 
         return createOrUpdateSellerSubaccount(seller);
     }
@@ -409,9 +483,15 @@ public class PaystackService {
         order.setPaymentStatus("paid");
         order.setPaymentMethod("paystack");
         order.setPaystackGatewayResponse(data.path("gateway_response").asText("success"));
+        order.setPaystackTransactionId(data.path("id").isMissingNode() ? null : data.path("id").asText(null));
         if (order.getPaystackSplitMode() != null && !order.getPaystackSplitMode().isBlank()) {
-            order.setCommissionStatus("collected");
+            order.setCommissionStatus("split_processed");
         }
+        order.setPayoutStatus(PAYOUT_STATUS_NOT_REQUIRED);
+        order.setPayoutReleased(false);
+        order.setPayoutReleasedAt(null);
+        order.setPayoutHeldAt(null);
+        order.setPayoutHoldReason(null);
         order.setPaidAt(LocalDateTime.now());
         orderRepository.save(order);
         notificationService.notifyPaymentReceived(order);
@@ -448,12 +528,12 @@ public class PaystackService {
 
         if (sellerShares.size() == 1) {
             SellerShare seller = sellerShares.values().iterator().next();
-            split.mode = "single_subaccount";
+            split.mode = SPLIT_MODE_SUBACCOUNT;
             split.singleSellerSubaccount = seller.subaccountCode;
+            split.sellerSubaccountCodes.add(seller.subaccountCode);
             split.feeBearer = "subaccount";
-            long productCommission = commissionFor(seller.grossPesewas);
-            split.sellerPayoutPesewas = seller.grossPesewas - productCommission;
-            split.commissionPesewas = amountInPesewas - split.sellerPayoutPesewas;
+            split.commissionPesewas = commissionFor(amountInPesewas);
+            split.sellerPayoutPesewas = amountInPesewas - split.commissionPesewas;
             applyItemSplitAmounts(sellerShares, split.commissionPesewas, split.sellerPayoutPesewas);
             return split;
         }
@@ -477,14 +557,16 @@ public class PaystackService {
             subaccount.put("subaccount", seller.subaccountCode);
             subaccount.put("share", sellerPayout);
             subaccounts.add(subaccount);
+            split.sellerSubaccountCodes.add(seller.subaccountCode);
         }
 
-        split.mode = "dynamic_multi_split";
+        split.mode = SPLIT_MODE_SUBACCOUNT;
         split.splitReference = "YSPLIT-" + order.getId() + "-" + System.currentTimeMillis();
         split.feeBearer = "subaccount";
         split.feeBearerSubaccount = feeBearerSubaccount;
-        split.commissionPesewas = amountInPesewas - totalSellerPayout;
-        split.sellerPayoutPesewas = totalSellerPayout;
+        split.commissionPesewas = commissionFor(amountInPesewas);
+        split.sellerPayoutPesewas = amountInPesewas - split.commissionPesewas;
+        subaccounts = distributeSellerSettlement(sellerShares, split.sellerPayoutPesewas);
 
         Map<String, Object> dynamicSplit = new LinkedHashMap<>();
         dynamicSplit.put("type", "flat");
@@ -500,7 +582,7 @@ public class PaystackService {
 
     private SellerShare sellerShare(Long sellerId) {
         User seller = userRepository.findById(sellerId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seller not found for Paystack split"));
+                .orElseThrow(() -> new PaymentApiException(HttpStatus.BAD_REQUEST, "SELLER_NOT_FOUND", "Seller not found for Paystack split", "Check that every checkout item belongs to an active seller."));
 
         seller = ensureSellerSubaccount(seller);
         String subaccountCode = seller.getPaystackSubaccountCode();
@@ -601,13 +683,13 @@ public class PaystackService {
 
     private void validateSellerPayoutDetails(User seller) {
         if (seller.getMomoNumber() == null || seller.getMomoNumber().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seller has not set payout details");
+            throw new PaymentApiException(HttpStatus.BAD_REQUEST, "SELLER_SUBACCOUNT_MISSING", "Seller payout details are missing", "Ask seller to update MoMo payout settings before checkout.");
         }
         if (seller.getMomoNetwork() == null || seller.getMomoNetwork().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seller has not set payout details");
+            throw new PaymentApiException(HttpStatus.BAD_REQUEST, "SELLER_SUBACCOUNT_MISSING", "Seller payout details are missing", "Ask seller to update MoMo payout settings before checkout.");
         }
         if (firstNonBlank(seller.getBankAccountName(), seller.getName(), seller.getShopName()) == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seller has not set payout details");
+            throw new PaymentApiException(HttpStatus.BAD_REQUEST, "SELLER_SUBACCOUNT_MISSING", "Seller payout details are missing", "Ask seller to update MoMo payout settings before checkout.");
         }
         resolveSettlementBankCode(seller);
     }
@@ -629,8 +711,81 @@ public class PaystackService {
             case "mtn", "mtn momo", "mtn mobile money" -> "MTN";
             case "vodafone", "telecel", "vodafone cash", "telecel cash" -> "VOD";
             case "airteltigo", "airtel tigo", "airteltigo money" -> "ATL";
-            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported network");
+            default -> throw new PaymentApiException(HttpStatus.BAD_REQUEST, "UNSUPPORTED_MOMO_NETWORK", "Seller payout details are missing", "Use MTN, Vodafone/Telecel, or AirtelTigo for seller MoMo payout settings.");
         };
+    }
+
+    private void validateSplitMetadataForSuccessfulPayment(Order order) {
+        if (order.getPaystackSplitMode() == null || order.getPaystackSplitMode().isBlank()
+                || order.getSellerSubaccountCode() == null || order.getSellerSubaccountCode().isBlank()
+                || order.getPlatformCommissionAmount() == null
+                || order.getSellerSettlementAmount() == null) {
+            throw new PaymentApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "PAYSTACK_SPLIT_METADATA_MISSING",
+                    "Payment was successful but split metadata is missing",
+                    "Check the Paystack Dashboard before marking this order paid. This order may have been created under the old payout flow."
+            );
+        }
+    }
+
+    private List<Map<String, Object>> distributeSellerSettlement(Map<Long, SellerShare> sellerShares, long totalSettlementPesewas) {
+        List<Map<String, Object>> subaccounts = new ArrayList<>();
+        long totalGross = sellerShares.values().stream().mapToLong(seller -> seller.grossPesewas).sum();
+        long allocated = 0;
+        int index = 0;
+        int count = sellerShares.size();
+
+        for (SellerShare seller : sellerShares.values()) {
+            long share = index == count - 1
+                    ? totalSettlementPesewas - allocated
+                    : BigDecimal.valueOf(totalSettlementPesewas)
+                            .multiply(BigDecimal.valueOf(seller.grossPesewas))
+                            .divide(BigDecimal.valueOf(Math.max(totalGross, 1)), 0, RoundingMode.HALF_UP)
+                            .longValueExact();
+            allocated += share;
+            seller.payoutPesewas = share;
+
+            Map<String, Object> subaccount = new LinkedHashMap<>();
+            subaccount.put("subaccount", seller.subaccountCode);
+            subaccount.put("share", share);
+            subaccounts.add(subaccount);
+            index++;
+        }
+
+        return subaccounts;
+    }
+
+    private Map<String, Object> paymentAudit(Order order, JsonNode paystackData) {
+        Map<String, Object> audit = new LinkedHashMap<>();
+        audit.put("orderId", order.getId());
+        audit.put("paystackReference", order.getPaystackReference());
+        audit.put("paystackTransactionId", order.getPaystackTransactionId());
+        audit.put("transactionStatus", paystackData == null ? order.getPaystackGatewayResponse() : paystackData.path("status").asText(""));
+        audit.put("buyerEmail", firstNonBlank(order.getCardEmail(), order.getUser() == null ? null : order.getUser().getEmail()));
+        audit.put("seller", firstNonBlank(order.getSellerName(), "Multiple sellers"));
+        audit.put("sellerSubaccountCode", order.getSellerSubaccountCode());
+        audit.put("grossAmount", order.getGrossAmount());
+        audit.put("platformCommission", order.getPlatformCommissionAmount());
+        audit.put("sellerExpectedSettlement", order.getSellerSettlementAmount());
+        audit.put("splitUsed", order.getPaystackSplitMode() != null && !order.getPaystackSplitMode().isBlank());
+        audit.put("splitMode", order.getPaystackSplitMode());
+        audit.put("payoutStatus", order.getPayoutStatus());
+        audit.put("settlementStatus", "handled_by_paystack");
+        audit.put("message", legacyPayoutStatus(order)
+                ? "This order was created under the old payout flow. Check Paystack Dashboard before taking action."
+                : "Payment split handled by Paystack. Manual payout release is not required.");
+        return audit;
+    }
+
+    private boolean legacyPayoutStatus(Order order) {
+        String payoutStatus = order.getPayoutStatus() == null ? "" : order.getPayoutStatus().trim();
+        String paymentStatus = order.getPaymentStatus() == null ? "" : order.getPaymentStatus().trim();
+        return "pending".equalsIgnoreCase(payoutStatus)
+                || "released".equalsIgnoreCase(payoutStatus)
+                || "ready_for_payout".equalsIgnoreCase(paymentStatus)
+                || "payout_on_hold".equalsIgnoreCase(paymentStatus)
+                || "payout_released".equalsIgnoreCase(paymentStatus);
     }
 
     private String normalizeMomoNetworkName(String network) {
@@ -658,10 +813,10 @@ public class PaystackService {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             return parsePaystackResponse(response);
         } catch (IOException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Could not reach Paystack");
+            throw new PaymentApiException(HttpStatus.BAD_GATEWAY, "PAYSTACK_UNREACHABLE", "Paystack transaction initialization failed", "Could not reach Paystack. Try again and check network/API key configuration.");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Paystack request was interrupted");
+            throw new PaymentApiException(HttpStatus.BAD_GATEWAY, "PAYSTACK_REQUEST_INTERRUPTED", "Paystack transaction initialization failed", "The Paystack request was interrupted.");
         }
     }
 
@@ -677,10 +832,10 @@ public class PaystackService {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             return parsePaystackResponse(response);
         } catch (IOException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Could not reach Paystack");
+            throw new PaymentApiException(HttpStatus.BAD_GATEWAY, "PAYSTACK_UNREACHABLE", "Paystack request failed", "Could not reach Paystack. Try again and check network/API key configuration.");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Paystack request was interrupted");
+            throw new PaymentApiException(HttpStatus.BAD_GATEWAY, "PAYSTACK_REQUEST_INTERRUPTED", "Paystack request failed", "The Paystack request was interrupted.");
         }
     }
 
@@ -695,10 +850,10 @@ public class PaystackService {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             return parsePaystackResponse(response);
         } catch (IOException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Could not reach Paystack");
+            throw new PaymentApiException(HttpStatus.BAD_GATEWAY, "PAYSTACK_UNREACHABLE", "Paystack request failed", "Could not reach Paystack. Try again and check network/API key configuration.");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Paystack request was interrupted");
+            throw new PaymentApiException(HttpStatus.BAD_GATEWAY, "PAYSTACK_REQUEST_INTERRUPTED", "Paystack request failed", "The Paystack request was interrupted.");
         }
     }
 
@@ -706,9 +861,11 @@ public class PaystackService {
         JsonNode body = objectMapper.readTree(response.body());
 
         if (response.statusCode() >= 400) {
-            throw new ResponseStatusException(
+            throw new PaymentApiException(
                     HttpStatus.BAD_GATEWAY,
-                    body.path("message").asText("Paystack request failed")
+                    "PAYSTACK_REQUEST_FAILED",
+                    body.path("message").asText("Paystack request failed"),
+                    body.toString()
             );
         }
 
@@ -717,11 +874,11 @@ public class PaystackService {
 
     private void requireConfigured() {
         if (secretKey == null || secretKey.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Paystack is not configured");
+            throw new PaymentApiException(HttpStatus.SERVICE_UNAVAILABLE, "PAYSTACK_NOT_CONFIGURED", "Paystack is not configured", "Set PAYSTACK_SECRET_KEY before accepting Paystack payments.");
         }
 
         if (requireLiveKeys && !isLiveSecretKey()) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Paystack live secret key is required");
+            throw new PaymentApiException(HttpStatus.SERVICE_UNAVAILABLE, "PAYSTACK_LIVE_KEY_REQUIRED", "Paystack live secret key is required", "Set PAYSTACK_SECRET_KEY to an sk_live key for real-cash payments.");
         }
     }
 
@@ -755,7 +912,7 @@ public class PaystackService {
                 return value.trim();
             }
         }
-        return "";
+        return null;
     }
 
     private String toJsonString(Object value) {
@@ -817,6 +974,7 @@ public class PaystackService {
         private String feeBearerSubaccount;
         private long commissionPesewas;
         private long sellerPayoutPesewas;
+        private final List<String> sellerSubaccountCodes = new ArrayList<>();
     }
 
     private static class SellerShare {

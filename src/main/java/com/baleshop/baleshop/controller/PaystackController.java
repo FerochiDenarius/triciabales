@@ -3,6 +3,7 @@ package com.baleshop.baleshop.controller;
 import com.baleshop.baleshop.model.Order;
 import com.baleshop.baleshop.model.User;
 import com.baleshop.baleshop.repository.OrderRepository;
+import com.baleshop.baleshop.service.PaymentApiException;
 import com.baleshop.baleshop.service.PaystackService;
 import com.baleshop.baleshop.service.SessionAuthService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -69,6 +70,18 @@ public class PaystackController {
         return ResponseEntity.ok(paystackService.status());
     }
 
+    @GetMapping("/audit")
+    public ResponseEntity<Map<String, Object>> audit(HttpServletRequest request) {
+        sessionAuthService.requireRole(request, "SUPER_ADMIN");
+        return ResponseEntity.ok(paystackService.auditPayments());
+    }
+
+    @GetMapping("/audit/{reference}")
+    public ResponseEntity<Map<String, Object>> auditReference(@PathVariable String reference, HttpServletRequest request) {
+        sessionAuthService.requireRole(request, "SUPER_ADMIN");
+        return ResponseEntity.ok(paystackService.auditPayment(reference));
+    }
+
     @GetMapping("/banks")
     public ResponseEntity<Map<String, Object>> banks(HttpServletRequest request) {
         sessionAuthService.requireRole(request, "SELLER", "ADMIN", "SUPER_ADMIN");
@@ -104,12 +117,23 @@ public class PaystackController {
         return null;
     }
 
+    @ExceptionHandler(PaymentApiException.class)
+    public ResponseEntity<Map<String, Object>> handlePaymentError(PaymentApiException exception) {
+        return ResponseEntity.status(exception.getStatusCode()).body(Map.of(
+                "success", false,
+                "code", exception.getCode(),
+                "message", exception.getReason() != null ? exception.getReason() : "Paystack request failed",
+                "details", exception.getDetails() == null ? "" : exception.getDetails()
+        ));
+    }
+
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, Object>> handlePaystackError(ResponseStatusException exception) {
         return ResponseEntity.status(exception.getStatusCode()).body(Map.of(
                 "success", false,
-                "status", exception.getStatusCode().value(),
-                "error", exception.getReason() != null ? exception.getReason() : "Paystack request failed"
+                "code", "PAYSTACK_REQUEST_FAILED",
+                "message", exception.getReason() != null ? exception.getReason() : "Paystack request failed",
+                "details", ""
         ));
     }
 }

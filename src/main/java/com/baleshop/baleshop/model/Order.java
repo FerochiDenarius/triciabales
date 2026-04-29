@@ -52,15 +52,21 @@ public class Order {
     private String paystackAccessCode;
     private String paystackAuthorizationUrl;
     private String paystackGatewayResponse;
+    private String paystackTransactionId;
+    private String sellerSubaccountCode;
     private String paystackSplitMode;
     private String paystackSplitReference;
     private String paystackFeeBearer;
     @Column(length = 4000)
     private String paystackSplitPayload;
     private LocalDateTime paidAt;
+    private Double grossAmount;
+    private Double platformCommissionAmount;
+    private Double sellerSettlementAmount;
     private Double commissionAmount;
     private Double sellerPayoutAmount;
     private String commissionStatus;
+    private String payoutStatus;
     private Boolean payoutReleased = false;
     private Boolean confirmedByBuyer = false;
     private LocalDateTime createdAt;
@@ -393,12 +399,36 @@ public class Order {
         this.paystackGatewayResponse = paystackGatewayResponse;
     }
 
+    public String getPaystackTransactionId() {
+        return paystackTransactionId;
+    }
+
+    public void setPaystackTransactionId(String paystackTransactionId) {
+        this.paystackTransactionId = paystackTransactionId;
+    }
+
+    public String getSellerSubaccountCode() {
+        return sellerSubaccountCode;
+    }
+
+    public void setSellerSubaccountCode(String sellerSubaccountCode) {
+        this.sellerSubaccountCode = sellerSubaccountCode;
+    }
+
     public String getPaystackSplitMode() {
         return paystackSplitMode;
     }
 
     public void setPaystackSplitMode(String paystackSplitMode) {
         this.paystackSplitMode = paystackSplitMode;
+    }
+
+    public String getSplitMode() {
+        return paystackSplitMode;
+    }
+
+    public void setSplitMode(String splitMode) {
+        this.paystackSplitMode = splitMode;
     }
 
     public String getPaystackSplitReference() {
@@ -433,6 +463,30 @@ public class Order {
         this.paidAt = paidAt;
     }
 
+    public Double getGrossAmount() {
+        return grossAmount;
+    }
+
+    public void setGrossAmount(Double grossAmount) {
+        this.grossAmount = grossAmount;
+    }
+
+    public Double getPlatformCommissionAmount() {
+        return platformCommissionAmount;
+    }
+
+    public void setPlatformCommissionAmount(Double platformCommissionAmount) {
+        this.platformCommissionAmount = platformCommissionAmount;
+    }
+
+    public Double getSellerSettlementAmount() {
+        return sellerSettlementAmount;
+    }
+
+    public void setSellerSettlementAmount(Double sellerSettlementAmount) {
+        this.sellerSettlementAmount = sellerSettlementAmount;
+    }
+
     public Double getCommissionAmount() {
         return commissionAmount;
     }
@@ -455,6 +509,14 @@ public class Order {
 
     public void setCommissionStatus(String commissionStatus) {
         this.commissionStatus = commissionStatus;
+    }
+
+    public String getPayoutStatus() {
+        return payoutStatus;
+    }
+
+    public void setPayoutStatus(String payoutStatus) {
+        this.payoutStatus = payoutStatus;
     }
 
     public Boolean getPayoutReleased() {

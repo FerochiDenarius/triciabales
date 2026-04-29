@@ -12,6 +12,8 @@ import com.baleshop.baleshop.repository.BaleRepository;
 import com.baleshop.baleshop.repository.OrderRepository;
 import com.baleshop.baleshop.repository.UserRepository;
 import com.baleshop.baleshop.service.NotificationService;
+import com.baleshop.baleshop.service.PaymentApiException;
+import com.baleshop.baleshop.service.PaystackService;
 import com.baleshop.baleshop.service.DeliveryEstimateService;
 import com.baleshop.baleshop.service.RefundService;
 import com.baleshop.baleshop.service.SessionAuthService;
@@ -55,6 +57,8 @@ public class OrderController {
     private DeliveryEstimateService deliveryEstimateService;
     @Autowired
     private RefundService refundService;
+    @Autowired
+    private PaystackService paystackService;
 
     @PostMapping("/checkout")
     public Order checkout(@RequestBody CheckoutRequest request, HttpServletRequest httpRequest) {
@@ -216,78 +220,34 @@ public class OrderController {
             }
             order.setDeliveryStatus(updates.get("deliveryStatus"));
             deliveryStatusChanged = true;
-
-            if ("delivered".equalsIgnoreCase(order.getDeliveryStatus()) && canMoveDeliveredOrderToPayoutQueue(order)) {
-                order.setPaymentStatus("ready_for_payout");
-                payoutChanged = true;
-            }
         }
 
         if (updates.containsKey("paymentStatus")) {
             if (!isPrivileged) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have permission to update payment status");
             }
+            if ("paystack".equalsIgnoreCase(order.getPaymentMethod())) {
+                throw new PaymentApiException(
+                        HttpStatus.BAD_REQUEST,
+                        "PAYSTACK_VERIFY_REQUIRED",
+                        "Before changing a Paystack payment status, verify the Paystack transaction by reference",
+                        "Use /api/paystack/verify?reference=" + nullToEmpty(order.getPaystackReference()) + ". Only Paystack success verification may mark this order paid."
+                );
+            }
             order.setPaymentStatus(updates.get("paymentStatus"));
             paymentStatusChanged = true;
         }
 
         if (updates.containsKey("holdPayout") && "true".equalsIgnoreCase(updates.get("holdPayout"))) {
-            if (!"SUPER_ADMIN".equalsIgnoreCase(actor.getRole())) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only SUPER_ADMIN can hold payouts");
-            }
-            if (isAutoSplitPaystackOrder(order)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Automatic split payouts are already handled by Paystack");
-            }
-            if (!isPayoutReleaseEligible(order)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order must be delivered or confirmed by buyer before payout hold");
-            }
-
-            order.setPaymentStatus("payout_on_hold");
-            order.setPayoutHeldAt(LocalDateTime.now());
-            order.setPayoutHoldReason(updates.getOrDefault("payoutHoldReason", "Held by super admin"));
-            payoutChanged = true;
+            throw manualPayoutNotRequired();
         }
 
         if (updates.containsKey("resumePayout") && "true".equalsIgnoreCase(updates.get("resumePayout"))) {
-            if (!"SUPER_ADMIN".equalsIgnoreCase(actor.getRole())) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only SUPER_ADMIN can resume payouts");
-            }
-            if (isAutoSplitPaystackOrder(order)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Automatic split payouts are already handled by Paystack");
-            }
-            if (!isPayoutReleaseEligible(order)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order must be delivered or confirmed by buyer before payout release");
-            }
-
-            order.setPaymentStatus("ready_for_payout");
-            order.setPayoutHeldAt(null);
-            order.setPayoutHoldReason(null);
-            payoutChanged = true;
+            throw manualPayoutNotRequired();
         }
 
         if (updates.containsKey("releasePayout") && "true".equals(updates.get("releasePayout"))) {
-            if (!"SUPER_ADMIN".equalsIgnoreCase(actor.getRole())) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only SUPER_ADMIN can release payouts");
-            }
-            if (isAutoSplitPaystackOrder(order)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Automatic split payouts are already handled by Paystack");
-            }
-            if (!isPayoutReleaseEligible(order)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order must be delivered or confirmed by buyer before payout");
-            }
-
-            double total = order.getTotal() != null ? order.getTotal() : 0.0;
-            double commission = total * 0.10;
-            double sellerPayout = total - commission;
-
-            order.setCommissionAmount(commission);
-            order.setSellerPayoutAmount(sellerPayout);
-            order.setPaymentStatus("payout_released");
-            order.setPayoutReleased(true);
-            order.setPayoutReleasedAt(LocalDateTime.now());
-            order.setPayoutHeldAt(null);
-            order.setPayoutHoldReason(null);
-            payoutChanged = true;
+            throw manualPayoutNotRequired();
         }
 
         orderRepository.save(order);
@@ -324,9 +284,6 @@ public class OrderController {
 
         order.setConfirmedByBuyer(true);
         order.setBuyerConfirmedAt(LocalDateTime.now());
-        if (!isAutoSplitPaystackOrder(order)) {
-            order.setPaymentStatus("ready_for_payout");
-        }
 
         orderRepository.save(order);
         notificationService.notifyOrderStatusChanged(order, "Buyer confirmation", "received");
@@ -342,6 +299,58 @@ public class OrderController {
     ) {
         User actor = sessionAuthService.requireRole(request, "SUPER_ADMIN");
         return ResponseEntity.status(HttpStatus.CREATED).body(refundService.requestRefund(id, refundRequest, actor));
+    }
+
+    @PutMapping("/{id}/cancel")
+    public ResponseEntity<Map<String, Object>> cancelOrder(@PathVariable Long id, HttpServletRequest request) {
+        User actor = sessionAuthService.requireRole(request, "SUPER_ADMIN");
+        Order order = orderRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+
+        if (isPaidOrder(order)) {
+            throw new PaymentApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "PAID_ORDER_REFUND_REQUIRED",
+                    "Paid orders cannot be cancelled directly",
+                    "Refund must be handled from Paystack transaction/refund dashboard or the Yenkasa refund flow using the transaction reference."
+            );
+        }
+
+        if ("paystack".equalsIgnoreCase(order.getPaymentMethod())
+                && order.getPaystackReference() != null
+                && !order.getPaystackReference().isBlank()) {
+            String paystackStatus = paystackService.transactionStatus(order.getPaystackReference());
+            if ("success".equalsIgnoreCase(paystackStatus)) {
+                throw new PaymentApiException(
+                        HttpStatus.BAD_REQUEST,
+                        "PAID_ORDER_REFUND_REQUIRED",
+                        "Paystack reports this transaction as successful, so it cannot be cancelled directly",
+                        "Use the refund flow with Paystack reference " + order.getPaystackReference() + "."
+                );
+            }
+            order.setPaystackGatewayResponse(paystackStatus);
+        }
+
+        order.setStatus("cancelled");
+        order.setDeliveryStatus("cancelled");
+        order.setPaymentStatus("cancelled");
+        order.setPayoutStatus("not_required");
+        order.setPayoutHeldAt(null);
+        order.setPayoutHoldReason(null);
+        orderRepository.save(order);
+
+        notificationService.notifySensitiveActivity(
+                actor,
+                "Order cancelled",
+                actor.getEmail() + " cancelled unpaid order #" + id + "."
+        );
+        notificationService.notifyOrderStatusChanged(order, "Order status", "cancelled");
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Order cancelled successfully",
+                "orderId", id
+        ));
     }
 
     @DeleteMapping("/{id}")
@@ -440,27 +449,8 @@ public class OrderController {
         String status = order.getStatus() == null ? "" : order.getStatus().trim();
 
         return "paid".equalsIgnoreCase(paymentStatus)
-                || "ready_for_payout".equalsIgnoreCase(paymentStatus)
-                || "payout_on_hold".equalsIgnoreCase(paymentStatus)
-                || "payout_released".equalsIgnoreCase(paymentStatus)
                 || "paid".equalsIgnoreCase(status)
                 || order.getPaidAt() != null;
-    }
-
-    private boolean canMoveDeliveredOrderToPayoutQueue(Order order) {
-        String paymentStatus = order.getPaymentStatus() == null ? "" : order.getPaymentStatus().trim();
-
-        return isPaidOrder(order)
-                && !isAutoSplitPaystackOrder(order)
-                && !"ready_for_payout".equalsIgnoreCase(paymentStatus)
-                && !"payout_on_hold".equalsIgnoreCase(paymentStatus)
-                && !"payout_released".equalsIgnoreCase(paymentStatus)
-                && !Boolean.TRUE.equals(order.getPayoutReleased());
-    }
-
-    private boolean isPayoutReleaseEligible(Order order) {
-        return Boolean.TRUE.equals(order.getConfirmedByBuyer())
-                || "delivered".equalsIgnoreCase(order.getDeliveryStatus());
     }
 
     private void validateSellerPayoutReady(Long sellerId, Set<Long> validatedSellerIds) {
@@ -473,14 +463,25 @@ public class OrderController {
 
         if (seller.getMomoNumber() == null || seller.getMomoNumber().isBlank()
                 || seller.getMomoNetwork() == null || seller.getMomoNetwork().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seller has not set payout details");
+            throw new PaymentApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "SELLER_SUBACCOUNT_MISSING",
+                    "Seller payout details are missing",
+                    "Ask seller to update MoMo payout settings before checkout."
+            );
         }
     }
 
-    private boolean isAutoSplitPaystackOrder(Order order) {
-        return order != null
-                && "paystack".equalsIgnoreCase(order.getPaymentMethod())
-                && order.getPaystackSplitMode() != null
-                && !order.getPaystackSplitMode().isBlank();
+    private PaymentApiException manualPayoutNotRequired() {
+        return new PaymentApiException(
+                HttpStatus.BAD_REQUEST,
+                "MANUAL_PAYOUT_NOT_REQUIRED",
+                "This order uses Paystack split settlement. Manual payout release is not required",
+                "Paystack automatically settles 90% to the seller subaccount and 10% to Yenkasa after a verified successful payment."
+        );
+    }
+
+    private String nullToEmpty(String value) {
+        return value == null ? "" : value;
     }
 }
