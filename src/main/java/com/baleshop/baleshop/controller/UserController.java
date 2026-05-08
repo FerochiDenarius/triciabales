@@ -140,10 +140,19 @@ public class UserController {
             user.setShopName(shopName);
             user.setShopAddress(shopAddress);
             user.setProofOfOperation(proofOfOperation);
+            user.setSellerApprovalStatus("PENDING_REVIEW");
+            user.setSellerReviewedAt(null);
+            user.setSellerReviewedById(null);
+            user.setSellerReviewNote(null);
 
             if (idImage != null && !idImage.isEmpty()) {
                 user.setIdImageUrl(cloudinaryService.uploadProfileImage(idImage));
             }
+        } else {
+            user.setSellerApprovalStatus(null);
+            user.setSellerReviewedAt(null);
+            user.setSellerReviewedById(null);
+            user.setSellerReviewNote(null);
         }
 
         if (referrer != null) {
@@ -610,6 +619,46 @@ public class UserController {
         );
 
         return ResponseEntity.ok(savedUser);
+    }
+
+    @PutMapping("/{id}/seller-approval")
+    public ResponseEntity<User> updateSellerApproval(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> request,
+            HttpServletRequest httpRequest
+    ) {
+        User actor = sessionAuthService.requireRole(httpRequest, "SUPER_ADMIN");
+        User seller = userRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Seller not found"));
+
+        if (!"SELLER".equalsIgnoreCase(seller.getRole())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This account is not a seller");
+        }
+
+        String approvalStatus = request.get("approvalStatus") != null
+                ? request.get("approvalStatus").trim().toUpperCase(Locale.ROOT)
+                : "";
+
+        if (!"APPROVED".equals(approvalStatus)
+                && !"PENDING_REVIEW".equals(approvalStatus)
+                && !"REJECTED".equals(approvalStatus)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid seller approval status");
+        }
+
+        String reviewNote = request.get("reviewNote");
+        seller.setSellerApprovalStatus(approvalStatus);
+        seller.setSellerReviewedAt(LocalDateTime.now());
+        seller.setSellerReviewedById(actor.getId());
+        seller.setSellerReviewNote(reviewNote == null ? null : reviewNote.trim());
+
+        User savedSeller = userRepository.save(seller);
+        notificationService.notifySensitiveActivity(
+                actor,
+                "Seller approval changed",
+                actor.getEmail() + " changed seller " + savedSeller.getEmail() + " approval to " + savedSeller.getSellerApprovalStatus() + "."
+        );
+
+        return ResponseEntity.ok(savedSeller);
     }
 
     @DeleteMapping("/{id}")

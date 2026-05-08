@@ -196,6 +196,10 @@ public class BaleController {
         User actor = sessionAuthService.requireRole(request, "SELLER", "ADMIN", "SUPER_ADMIN");
 
         if ("SELLER".equalsIgnoreCase(actor.getRole())) {
+            if (!isApprovedSeller(actor)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Your seller account is waiting for super admin approval");
+            }
+
             sellerId = actor.getId();
             sellerName = actor.getName();
         } else if (sellerId == null) {
@@ -314,9 +318,23 @@ public class BaleController {
                 : seller.getAccountStatus().trim().toUpperCase(Locale.ROOT);
 
         return "ACTIVE".equals(status)
+                && isApprovedSeller(seller)
                 && seller.getBlockedAt() == null
                 && seller.getSuspendedAt() == null
                 && seller.getDeletedAt() == null;
+    }
+
+    private boolean isApprovedSeller(User seller) {
+        if (seller == null || !"SELLER".equalsIgnoreCase(seller.getRole())) {
+            return true;
+        }
+
+        String approvalStatus = seller.getSellerApprovalStatus();
+        if (approvalStatus == null || approvalStatus.isBlank()) {
+            return true;
+        }
+
+        return "APPROVED".equals(approvalStatus.trim().toUpperCase(Locale.ROOT));
     }
 
     private Bale enrichSellerDetails(Bale bale) {

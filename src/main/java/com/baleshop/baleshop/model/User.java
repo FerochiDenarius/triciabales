@@ -52,6 +52,11 @@ public class User {
     private String idImageUrl;
     private String shopName;
     private String shopAddress;
+    private String sellerApprovalStatus;
+    private LocalDateTime sellerReviewedAt;
+    private Long sellerReviewedById;
+    @Column(length = 1000)
+    private String sellerReviewNote;
     @Column(length = 2000)
     private String proofOfOperation;
 
@@ -359,6 +364,38 @@ public class User {
 
     public void setShopAddress(String shopAddress) {
         this.shopAddress = shopAddress;
+    }
+
+    public String getSellerApprovalStatus() {
+        return sellerApprovalStatus;
+    }
+
+    public void setSellerApprovalStatus(String sellerApprovalStatus) {
+        this.sellerApprovalStatus = sellerApprovalStatus;
+    }
+
+    public LocalDateTime getSellerReviewedAt() {
+        return sellerReviewedAt;
+    }
+
+    public void setSellerReviewedAt(LocalDateTime sellerReviewedAt) {
+        this.sellerReviewedAt = sellerReviewedAt;
+    }
+
+    public Long getSellerReviewedById() {
+        return sellerReviewedById;
+    }
+
+    public void setSellerReviewedById(Long sellerReviewedById) {
+        this.sellerReviewedById = sellerReviewedById;
+    }
+
+    public String getSellerReviewNote() {
+        return sellerReviewNote;
+    }
+
+    public void setSellerReviewNote(String sellerReviewNote) {
+        this.sellerReviewNote = sellerReviewNote;
     }
 
     public String getProofOfOperation() {
