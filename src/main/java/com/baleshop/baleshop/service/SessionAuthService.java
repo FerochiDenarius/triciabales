@@ -44,9 +44,13 @@ public class SessionAuthService {
 
     public User requireRole(HttpServletRequest request, String... allowedRoles) {
         User user = requireAuthenticatedUser(request);
-        Set<String> roles = new HashSet<>(Arrays.asList(allowedRoles));
+        Set<String> roles = new HashSet<>();
 
-        if (!roles.contains(user.getRole())) {
+        Arrays.stream(allowedRoles)
+                .map(this::normalizeRole)
+                .forEach(roles::add);
+
+        if (!roles.contains(normalizeRole(user.getRole()))) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have permission to perform this action");
         }
 
@@ -68,5 +72,11 @@ public class SessionAuthService {
         }
 
         return authHeader.substring(7).trim();
+    }
+
+    private String normalizeRole(String role) {
+        return role == null
+                ? ""
+                : role.trim().replace('-', '_').replaceAll("\\s+", "_").toUpperCase(Locale.ROOT);
     }
 }
